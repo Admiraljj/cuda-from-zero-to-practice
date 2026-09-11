@@ -21,22 +21,4 @@ nvcc -std=c++17 cuda_versions.cu -o cuda_versions
 
 用 [环境记录模板](environment-record.md) 记录真实结果，避免把正文示意参数当成实测。
 
-从教材根目录运行静态检查：
-
-```bash
-python3 scripts/verify_cuda_intro.py --chapter 02 --static-only
-```
-
-在已经获准使用 NVIDIA GPU、具备 nvcc 和主机编译器的环境完整编译运行：
-
-```bash
-python3 scripts/verify_cuda_intro.py --chapter 02
-```
-
-只有编译工具、没有可访问 GPU 的构建机可以使用 `--build-only`。该模式会明确标记未运行设备测试。
-
-完整检查包含正常查询与单次屏蔽设备后的失败路径检查。它只修改自己创建的子进程环境，不修改 shell 的设备限制，也不访问作业之外的设备。构建产物位于新建的临时目录，结束后自动清理。
-
-## 本轮验证状态
-
-2026-09-11：本地静态一致性检查通过。编辑环境没有可用 nvcc，真实编译、驱动查询和 GPU 测试未执行；预期结果不能当成服务器验收结果。
+逐项核对程序返回值与输出。若当前没有可访问的 CUDA 设备，记录实际错误或零设备状态，不把正文里的示意参数当成自己的设备信息。

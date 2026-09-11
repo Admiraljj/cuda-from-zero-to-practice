@@ -42,32 +42,12 @@ compute-sanitizer --tool synccheck --error-exitcode 99 ./debug_cases sync-good
 
 不要把程序BAD CASE completed或退出0当作计算正确。坏版即便产生看似合理结果，其执行仍然错误。
 
-## 自动检查
+## 如何判断实验结果
 
-```bash
-python3 scripts/verify_chapter07.py --static-only
-python3 scripts/test_chapter07_checks.py
-python3 scripts/verify_chapter07.py --cpu-only
-python3 scripts/verify_chapter07.py --build-only
-python3 scripts/verify_chapter07.py
-```
+需要同时核对程序输出、工具是否正常启动、诊断类别与错误汇总。坏版不能仅凭任意非零退出码算作复现成功；修复版则需要数值正确，并且对应工具未报告错误。
 
-只有默认模式运行CUDA修复版与工具。显式执行故意错误：
-
-```bash
-python3 scripts/verify_chapter07.py --with-intentional-errors
-```
-
-支持--cxx、--nvcc、--sanitizer指定工具路径，--arch指定支持的架构。脚本复用同目录verify_chapter05.py的进程执行函数，不应单独移动它。
-
-工具检测验收要求：有工具启动证据、可识别汇总、相应错误类别；坏版不能只凭任意非零退出码通过。若工具版本的报告格式改变或该架构/构建未复现预期诊断，脚本会失败并打印日志，需人工核对，不自动弱化检查。
-
-每个子命令设有超时。超时不是目标错误被成功检测的证据；工具/目标进程的退出与设备恢复应另行确认，不能保证所有平台上的子进程均已被终止。只处理自己启动的练习进程，不重置共享GPU或终止其他用户任务。
+如果工具或程序卡住，超时本身不是成功检测目标错误的证据。只处理自己启动的练习进程，不重置共享GPU或终止其他用户任务。
 
 ## 工具能力与版本
 
 本章基于NVIDIA官方Compute Sanitizer说明。initcheck基础案例使用默认global空间；较新工具提供shared/all选项，本地旧版本可能没有。racecheck主要观察shared访问hazard，不覆盖所有global竞争。synccheck不是任意并发协议的完整证明器。先修memcheck错误，再分析其他工具结果。
-
-## 当前验证记录
-
-三份源码与正文镜像检查、10项合成日志/输出离线测试已通过。无可用C++/CUDA编译器及GPU实测环境，未执行真实编译、Compute Sanitizer或CUDA-GDB。本书中的预期诊断不是伪造的实测日志。需要在你的练习环境完成编译与设备验收。

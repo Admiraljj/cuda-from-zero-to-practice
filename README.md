@@ -6,7 +6,7 @@
 
 > 当前发布第 1—7 章的教材化修订版，不是已经写完的全书。后续内容将逐章完善。
 >
-> 已完成源码与正文一致性检查、45 项 Python 离线测试；尚未实际完成 C++/CUDA 编译、GPU 运行及 Compute Sanitizer 验收。文中的示例输出是预期结果，不冒充硬件实测。
+> 文中的示例输出为预期结果；案例尚未完成实机验证，请在自己的开发环境中编译运行并核对。
 
 ## 从这里开始
 
@@ -18,7 +18,7 @@
 6. [二维索引与图像网格](06-二维索引与图像网格.md)
 7. [错误检查与 Compute Sanitizer](07-错误检查与Compute-Sanitizer.md)
 
-配套：[练习答案（第 1—7 章）](附录-C-练习答案.md) · [版本与验证记录](00-教材修订进度.md)
+配套：[练习答案（第 1—7 章）](附录-C-练习答案.md)
 
 第 1 章只需要 C++17 编译器，不需要 GPU。第 2 章起以 Linux、NVIDIA GPU、CUDA Toolkit 为主线；环境检查和命令解释放在正文中。请按顺序阅读，不必预先掌握指针、warp、SIMT 或编译选项。
 
@@ -29,9 +29,9 @@
 - 完整源文件、命令拆解、预期输出、错误诊断和验证方法。
 - 从预测结果、修改代码到独立实现的练习与参考答案。
 
-代码按章节放在 `code/`，验收脚本在 `scripts/`。第 7 章包含故意错误的教学案例：默认测试不执行错误模式，启用前请阅读该章的保护开关与风险说明。
+代码按章节放在 `code/`，直接按照正文中的 `g++`、`nvcc` 命令编译运行。第 7 章包含故意错误的教学案例：默认测试不执行错误模式，启用前请阅读该章的保护开关与风险说明。
 
-## 资料来源与教学依据
+## 参考资料
 
 技术事实以 NVIDIA 官方资料为主要依据，具体引用放在相应章节中：
 
@@ -40,12 +40,6 @@
 - [NVCC 编译器文档](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html)：编译、链接和命令选项。
 - [CUDA Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html)：正确性、访存与性能分析。
 - [Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html) 与 [CUDA-GDB](https://docs.nvidia.com/cuda/cuda-gdb/index.html)：错误诊断和调试。
-
-教学设计还来自仓库维护者在学习 CUDA 时提出的问题，以及与 AI 教学助手交流中的对话反馈。例如：`n` 与字节数的区别、指针赋值为什么不是数组复制、`nvcc` 命令各部分的作用、warp 与 SIMT 的含义、异步提交与实际完成的区别。这些问题被重新组织为章节知识点、手算案例和练习，不是直接拼接聊天问答。
-
-对话只作为“哪里难懂、需要怎样补充”的编辑依据，不作为技术事实的权威来源。原始私人聊天、账号信息、服务器登录信息和编辑草稿不随仓库发布。教材包含 AI 辅助整理，仍需通过实际编译、实验与读者反馈持续校正。
-
-本仓库不是 NVIDIA 官方项目，不代表 NVIDIA 背书；第三方文档及其权利归原权利人所有。当前未指定项目的开源许可证。
 
 ## 下载与阅读
 
@@ -64,28 +58,9 @@ cd cuda-from-zero-to-practice
 
 如果已有自己的 Obsidian 仓库，只复制教材与 CSS：在“设置 → 外观”选择暗色模式，并启用 CSS 代码片段 `vscode-dark`。GitHub 网页的配色由 GitHub 自己的主题设置决定，Obsidian CSS 不会改变 GitHub 页面。
 
-## 如何验证
+## 编译与练习
 
-Python 离线测试只检查验收器逻辑，不执行 CUDA：
-
-```bash
-python3 scripts/verify_release.py
-python3 -m unittest discover -s scripts -p 'test_*checks.py'
-```
-
-文档与源文件镜像检查：
-
-```bash
-python3 scripts/verify_chapter01.py --static-only
-python3 scripts/verify_cuda_intro.py --chapter 02 --static-only
-python3 scripts/verify_cuda_intro.py --chapter 03 --static-only
-python3 scripts/verify_cuda_intro.py --chapter 04 --static-only
-python3 scripts/verify_chapter05.py --static-only
-python3 scripts/verify_chapter06.py --static-only
-python3 scripts/verify_chapter07.py --static-only
-```
-
-安装工具链后，按各章说明实际编译运行，不能用静态检查替代 GPU 验收。CPU 案例可以单独编译；附带的 CMake 工程也支持关闭 CUDA：
+先按各章说明编译程序，预测输出，再逐项核对实际结果。CPU 案例可以单独编译；附带的 CMake 工程也支持关闭 CUDA：
 
 ```bash
 cmake -S . -B build-cpu -DBUILD_CUDA_EXAMPLES=OFF

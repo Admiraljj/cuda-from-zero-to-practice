@@ -16,17 +16,4 @@ nvcc -std=c++17 branch_paths.cu -o branch_paths
 ./branch_paths
 ```
 
-在教材根目录执行检查：
-
-```bash
-python3 scripts/verify_cuda_intro.py --chapter 04 --static-only
-python3 scripts/verify_cuda_intro.py --chapter 04 --build-only
-python3 scripts/verify_cuda_intro.py --chapter 04
-python3 scripts/test_cuda_intro_checks.py
-```
-
-前三条依次是静态检查、仅编译、编译并实际运行；第四条仅用人工构造输出测试检查器，不执行 CUDA。需要指定架构时给前三条中的编译模式加上设备与 Toolkit 都支持的 --arch 参数。
-
-同一次 kernel 的线程打印顺序不固定；检查器按完整身份集合核对，拒绝缺失、重复或算错的记录。源码中的 PASS launch 仅证明启动及同步未报告错误，不代替内容验证。改线程数以后，原检查器的固定预期不再适用。
-
-编写本章时当前编辑环境无 nvcc 和可用 CUDA 运行环境；此处提供的是待服务器验收的源码，不声称实际 GPU 测试已通过。
+同一次 kernel 的线程打印顺序不固定。按完整身份集合核对，确认记录没有缺失、重复或计算错误。源码中的 `PASS launch` 仅表示启动及同步未报告错误，不能替代内容验证。修改线程数量后，要重新计算总记录数、warp数与lane。

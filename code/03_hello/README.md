@@ -18,34 +18,15 @@ nvcc -std=c++17 hello_one.cu -o hello_one
 
 正式记录应包含目标架构。若确认设备与 Toolkit 支持 sm_80，可以加 `-arch=sm_80`；不要把示例目标照搬到所有机器。其他参数解释见正文。
 
-## 配套检查
-
-从教材根目录执行：
+## 运行其余案例
 
 ```bash
-python3 scripts/verify_cuda_intro.py --chapter 03 --static-only
+nvcc -std=c++17 hello.cu -o hello
+./hello
+nvcc -std=c++17 launch_order.cu -o launch_order
+./launch_order
+nvcc -std=c++17 scalar_tasks.cu -o scalar_tasks
+./scalar_tasks
 ```
 
-这是文档和源码一致性检查，不编译或运行 GPU 程序。
-
-具备正确开发环境时执行：
-
-```bash
-python3 scripts/verify_cuda_intro.py --chapter 03
-```
-
-可用 `--arch sm_80` 指定经过确认的目标，或 `--nvcc /实际路径/nvcc` 指定编译器。`--build-only` 只验证构建，不运行 kernel。
-
-运行检查按 GPU 记录的多重集合验证，允许线程输出重排，但拒绝缺失、重复和错误数值。它只要求主机自己的 A/B/C 顺序与同步后的完成标记，不要求 GPU 必须在 B 之后开始输出。所有案例都必须编译并运行成功，才报告 GPU 测试通过。
-
-## 本地离线测试
-
-```bash
-python3 scripts/test_cuda_intro_checks.py
-```
-
-这里使用人工构造的输出文本检验检查器本身，覆盖线程重排、B 与设备输出交错、重复记录、漏记录、错误数值和缺失完成标记。**它不执行 CUDA，也不证明真实 GPU 行为已经通过测试。**
-
-## 本轮验证状态
-
-2026-09-11：文档/源码静态检查及检查器离线单元测试通过。编辑环境没有可用 nvcc/GPU，真实构建与执行仍待开发环境验收。
+按正文中的公式核对每条线程记录，允许线程输出顺序变化，但不能缺失、重复或出现错误数值。观察主机A/B/C顺序与同步后的完成标记，不要求GPU一定在B之后开始输出。

@@ -709,7 +709,7 @@ break设置函数断点；run带参数启动；info cuda threads查看当前CUDA
 
 宏不是设备指令，也不会让一个本来异步的API自动变成同步。CUDA_CHECK_KERNEL恰好在宏内部组合了启动检查和同步检查，所以它才具有那两步的效果。
 
-本轮第5—7章采用普通check函数与显式清理，方便看见失败后的路径。不要误认为std::exit会像从main正常返回一样自动析构所有局部对象；正式资源封装将在第8章从需求逐步引入。
+第5—7章采用普通check函数与显式清理，方便看见失败后的路径。不要误认为std::exit会像从main正常返回一样自动析构所有局部对象；正式资源封装将在第8章从需求逐步引入。
 
 ## 7.15 保留的小型越界文件：独立复现，不混入正常验收
 
@@ -784,25 +784,13 @@ compute-sanitizer --tool memcheck --padding 32 --error-exitcode 99 ./broken_oob 
 13. 记录一次修复前后的同一输入、同一编译配置、同一工具测试；如果工具没启动成功，应写PASS、FAIL还是NOT RUN？
 14. 为什么不应把故意错误模式加入默认正常CTest？“预期检测到错误”的测试需要额外核对什么？
 
-## 7.17 配套验收与本章完成标准
+## 7.17 实验核对与本章完成标准
 
-在教材根目录：
+按照 7.4 的命令编译 `debug_cases.cu`，先运行五个 good 模式；再按 7.6—7.9 的命令用对应的 Compute Sanitizer 工具检查修复版。CPU 数值比较实验按 7.12 单独编译运行。
 
-```bash
-python3 scripts/verify_chapter07.py --static-only
-python3 scripts/test_chapter07_checks.py
-python3 scripts/verify_chapter07.py --cpu-only
-python3 scripts/verify_chapter07.py --build-only
-python3 scripts/verify_chapter07.py
-```
+准备在已授权的练习 GPU 上观察故意错误时，再按对应小节的命令选择 bad 模式并加 `--run-broken`。不要批量运行不理解的故障案例，也不要将它们加入默认正常测试。
 
-默认验收只执行修复版，并在工具下检查。若你明确准备在练习GPU上运行本章的故意错误，才使用：
-
-```bash
-python3 scripts/verify_chapter07.py --with-intentional-errors
-```
-
-脚本既要求相关报告，也要求对应非零汇总，不把任意失败算作复现成功。缺少工具、编译器或设备时，保存原因，不报告GPU验收通过。具体选项与版本差异见配套README。
+对坏版，不只看退出码：应确认工具成功启动、报告对应错误类别、汇总确有错误；对修复版，则要求结果正确且相应工具未报告错误。若缺少工具、编译器或设备，保存原因并记录“未运行”。编译及检测命令集中在 [案例目录](code/07_debug/README.md)。
 
 本章完成后，你应当能建立这条排错链：
 
