@@ -1,0 +1,6 @@
+{
+  "theme": "obsidian",
+  "accentColor": "#007acc",
+  "baseFontSize": 16,
+  "enabledCssSnippets": ["vscode-dark"]
+}

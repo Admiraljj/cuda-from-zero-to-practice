@@ -1,0 +1,61 @@
+.theme-dark {
+  --background-primary: #1e1e1e;
+  --background-primary-alt: #181818;
+  --background-secondary: #181818;
+  --background-secondary-alt: #242424;
+  --background-modifier-border: #3c3c3c;
+  --background-modifier-hover: #2a2d2e;
+  --text-normal: #d4d4d4;
+  --text-muted: #9d9d9d;
+  --text-accent: #4daafc;
+  --interactive-accent: #007acc;
+  --code-normal: #d4d4d4;
+  --code-background: #181818;
+  --h1-color: #f0f0f0;
+  --h2-color: #e7e7e7;
+  --h3-color: #dcdcdc;
+}
+
+body {
+  --font-text: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  --font-monospace: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+}
+
+.markdown-source-view.mod-cm6 .cm-scroller,
+.markdown-preview-view { line-height: 1.68; }
+.markdown-preview-sizer,
+.markdown-source-view.mod-cm6 .cm-sizer { max-width: 1020px; }
+
+.theme-dark code[class*="language-"],
+.theme-dark pre[class*="language-"],
+.theme-dark .HyperMD-codeblock,
+.theme-dark .cm-inline-code {
+  color: #d4d4d4;
+  font-variant-ligatures: none;
+  text-shadow: none;
+}
+.theme-dark .token.comment,
+.theme-dark .cm-comment { color: #6a9955 !important; }
+.theme-dark .token.keyword,
+.theme-dark .token.control,
+.theme-dark .cm-keyword { color: #569cd6 !important; }
+.theme-dark .token.string,
+.theme-dark .cm-string { color: #ce9178 !important; }
+.theme-dark .token.number,
+.theme-dark .token.boolean,
+.theme-dark .cm-number,
+.theme-dark .cm-bool { color: #b5cea8 !important; }
+
+.markdown-rendered pre {
+  border: 1px solid #333;
+  border-radius: 5px;
+  padding: 1em;
+}
+.markdown-rendered h2 {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: .25em;
+}
+.markdown-rendered table { width: 100%; }
+.mermaid { background: #f3f3f3; border-radius: 5px; padding: 1rem; }
+.nav-file-title.is-active { background: #37373d; }
+.workspace-tab-header.is-active { background: #1e1e1e; }

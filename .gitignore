@@ -1,0 +1,14 @@
+build/
+build-*/
+__pycache__/
+*.pyc
+*.exe
+*.o
+*.obj
+*.out
+*.nsys-rep
+*.ncu-rep
+.obsidian/workspace*.json
+.obsidian/cache/
+.env
+.env.*
