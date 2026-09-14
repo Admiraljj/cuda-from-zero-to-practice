@@ -1838,4 +1838,4 @@ memcheck / racecheck / synccheck结果：
 - [Runtime：Occupancy API](https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__OCCUPANCY.html)。
 - [Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)。
 
-下一章：[并行归约（尚未发布）](README.md#后续章节)。届时不再是每个线程独立写一个邻域输出，而是让一组线程逐轮合并中间结果。先画“哪一轮谁读谁写”，就能把本章的协作与同步知识继续用下去。
+下一章：[并行归约](11-并行归约-从错误到高效.md)。下一章不再是每个线程独立写一个邻域输出，而是让一组线程逐轮合并中间结果。先画“哪一轮谁读谁写”，就能把本章的协作与同步知识继续用下去。
