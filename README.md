@@ -4,7 +4,7 @@
 
 学习顺序是：先理解问题与数据，再手算线程分工，阅读完整程序，逐行理解新增语法，运行并验证结果，最后独立修改和练习。这不是速查表，也不是 NVIDIA 官方指南的逐页译本。
 
-> 当前发布第 1—8 章的教材化修订版，不是已经写完的全书。后续内容将逐章完善。
+> 当前发布第 1—9 章的教材化修订版，不是已经写完的全书。后续内容将逐章完善。
 >
 > 文中的示例输出为预期结果；案例尚未完成实机验证，请在自己的开发环境中编译运行并核对。
 
@@ -18,8 +18,9 @@
 6. [二维索引与图像网格](06-二维索引与图像网格.md)
 7. [错误检查与 Compute Sanitizer](07-错误检查与Compute-Sanitizer.md)
 8. [显存、拷贝、统一内存与 RAII](08-显存-拷贝-统一内存与RAII.md)
+9. [正确计时与带宽基线](09-正确计时与带宽基线.md)
 
-配套：[练习答案（第 1—8 章）](附录-C-练习答案.md)
+配套：[练习答案（第 1—9 章）](附录-C-练习答案.md)
 
 第 1 章只需要 C++17 编译器，不需要 GPU。第 2 章起以 Linux、NVIDIA GPU、CUDA Toolkit 为主线；环境检查和命令解释放在正文中。请按顺序阅读，不必预先掌握指针、warp、SIMT 或编译选项。
 
@@ -64,23 +65,23 @@ cd cuda-from-zero-to-practice
 先按各章说明编译程序，预测输出，再逐项核对实际结果。CPU 案例可以单独编译；附带的 CMake 工程也支持关闭 CUDA：
 
 ```bash
-cmake -S . -B build-cpu -DBUILD_CUDA_EXAMPLES=OFF
-cmake --build build-cpu
-ctest --test-dir build-cpu --output-on-failure
+cmake -S . -B build-cpu -DBUILD_CUDA_EXAMPLES=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build-cpu --config Release
+ctest --test-dir build-cpu -C Release --output-on-failure
 ```
 
 构建 CUDA 示例时，在第 2 章确认工具链后使用新的构建目录：
 
 ```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
 需要指定 GPU 架构时，在配置命令中添加经设备查询确认的 `-DCMAKE_CUDA_ARCHITECTURES=数字`，不要照抄不适合自己 GPU 的架构号。CMake 是可选的批量构建入口；初学时先执行正文的单文件命令。
 
 ## 后续章节
 
-计划继续覆盖正确计时、shared memory、归约、warp 原语、直方图、scan、矩阵转置、矩阵乘法、卷积、性能分析、资源与 occupancy、stream/event、CUDA Graphs、常用库、多文件工程、多 GPU、Softmax 与毕业项目。
+计划继续覆盖 shared memory、归约、warp 原语、直方图、scan、矩阵转置、矩阵乘法、卷积、性能分析、资源与 occupancy、stream/event、CUDA Graphs、常用库、多文件工程、多 GPU、Softmax 与毕业项目。
 
-这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前阅读到第 8 章即可暂停并完成实验，不需要寻找尚未发布的正文。
+这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前阅读到第 9 章即可暂停并完成实验，不需要寻找尚未发布的正文。
