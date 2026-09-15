@@ -1200,3 +1200,135 @@ stages_per_call=-1仅指没有查询CUB内部kernel数，不表示零工作或�
 先手算8项树及13项尾部，运行CPU模型核对轨迹；再编译block部分和，逐项检查partial；再验证多阶段长度和每阶段CPU参考；扩展双项、跨步和最大值边界；最后核对CUB与benchmark原始输入保护，运行正常sanitizer案例。
 
 返回成功仍不足以证明正确的情况包括：只核对最终总数导致抵消错误；只用全零输入掩盖漏写；仅看启动返回成功而没等待执行；只看isfinite却没比较数学结果；仅通过一次无竞争报告就推断所有并发路径安全；将静态模型通过当作GPU已编译运行。
+## 第 12 章
+
+### 1. 多维 block 的 lane
+
+CUDA 按 `linear=x+blockDim.x*(y+blockDim.y*z)` 线性化。题中为 `0+16*1=16`，所以在 warp 0、lane 16。`threadIdx.x` 只是一维坐标；例如 `(0,0,0)` 是 lane 0，`(0,1,0)` 是 lane 16，不能只看 x 推导 lane。
+
+### 2. 48 线程 block
+
+需要 `ceil(48/32)=2` 个 warp。第二个 warp 只有本 block 的 16 个实际线程，即线性线程 32..47；它不会和下一个 block 拼接。warp 身份始终包含 block 边界，最后一个不满 warp 的硬件活动情况要按当前架构理解，但程序不能把另一 block 的线程当作它的参与者。
+
+### 3. 位图
+
+lane 0、2、4、6 置位，低 8 位是 `01010101`，十六进制为 `0x00000055`，人口数是 4。lane 0 对应最低位，不要把书写方向反过来。
+
+### 4. 稀疏 rank
+
+`0x92` 的置位 lane 是 1、4、7，所以 lane 7 在从 0 开始的集合排名为 2。公式是 `popc(mask & ((1u<<7)-1))`。lane 是物理位置 7；rank 是它之前有几个被选位置，两者仅在低位连续置位时碰巧相同。
+
+### 5. 三种集合
+
+第二个 warp 的 32 个已启动线程都到达 collective，所以参与 mask 可为 `0xffffffff`；只有全局索引 32..36 有输入，对应有效数据 mask `0x1f`。本章数据 `i%7-3` 在这五项为 `[1,2,3,-3,-2]`，正数结果 mask 是 `0x7`。参与者回答“谁调用这一实例”，有效输入回答“谁有真实数据”，predicate 结果回答“参与投票者中谁满足条件”。
+
+### 6. 分支里的 activemask
+
+`__activemask()` 只返回该执行点当前活动 lane 的快照。独立线程调度、编译器控制流和路径推进都可能让它不是你想重建的业务条件集合。应在进入分歧控制流前，让已知参与者共同执行 `__ballot_sync(participants, condition)`，保存结果，分支内再使用这份显式集合。
+
+### 7. Shuffle 源映射
+
+在边界采用程序中非环绕行为时：
+
+| lane | 自己 | direct(0) | down(1) | up(1) | xor(1) |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 100 | 100 | 101 | 100 | 101 |
+| 7 | 107 | 100 | 108 | 106 | 106 |
+| 8 | 108 | 100 | 109 | 107 | 109 |
+| 31 | 131 | 100 | 131 | 130 | 130 |
+
+不环绕表示 lane 31 的 down(1) 不去读 lane 0，lane 0 的 up(1) 不去读 lane 31。实际使用仍要满足源 lane 活跃和 mask 契约；边界返回自身不意味着任意不参与源都安全。
+
+### 8. width=8 子组
+
+lane 6、7 属于组 0，rank 分别 6、7；lane 8、15 属于组 1，rank 分别 0、7。组号是 `lane/8`，rank 是 `lane%8`。lane 8 的子组 rank 0 对应物理 lane 8，不是整个 warp 的 lane 0。
+
+### 9. 正数 ballot
+
+```cpp
+unsigned participants = 0xffffffffu;       // 本例保证完整 warp 到达
+unsigned valid = __ballot_sync(participants, global_i < n);
+unsigned positives = __ballot_sync(participants,
+                                   global_i < n && x > 0.0f);
+int count = __popc(positives);
+```
+
+如果调用位置本来只有另一已知参与集合，应传那份 mask。`popc(activemask())` 数的是当前参与 lane 数，不检查 `x>0`，因此不能代替正数计数。
+
+### 10. 空集合的 all
+
+数学上“空集合中所有项满足条件”常定义为真，但业务可能要求“至少有一个样本且全部为正”。应同时保留有效数量，例如 `answer=(__popc(valid)>0) && all_valid_positive`。collective 的返回位模式或布尔值是接口结果，空输入业务语义仍由程序规定。
+
+### 11. 分支内 collective
+
+不能。奇数 lane 跳过调用时，偶数 lane 仍传全 mask，就声称未到达的奇数 lane 也属于同一 collective。先在一致位置用 ballot 得到偶数 mask，再让协议要求的 lane 以匹配控制流调用；还必须确认每次读取的源 lane 在集合中且有定义。更简单的求和通常让完整 warp 调用，奇数 lane 贡献单位元 0。
+
+### 12. 稀疏集合不自动压紧
+
+mask 只选参与位，不把“集合中的第 2 项”改名为物理 lane 3；shuffle 的源参数仍按 lane/子组编号解释。安全方案一：完整 warp 调用，选中 lane 贡献 `lane+1`，未选 lane 贡献 0，再做普通 32-lane 归约。方案二：用 ballot 和低位 popcount 求稀疏 rank，显式把选中值压到 shared/另一缓冲的连续位置，建立同步后再对紧凑数据归约。
+
+### 13. 32 项归约轨迹
+
+lane `(0,1,31)` 的轨迹为：初始 `(1,2,32)`；offset16 后 `(18,20,32)`；offset8 后 `(52,56,32)`；offset4 后 `(120,128,32)`；offset2 后 `(256,272,32)`；offset1 后 `(528,272,32)`。这份算法最终只承诺 lane 0 保存总和 528；lane 1 的 272 是中间树残留，不是第二个总和。
+
+### 14. 65 项尾部
+
+三个 block/warp 处理索引 0..31、32..63、64。输入是 `i%11-5`，三段分别求和得到 -5、-4、4，尾部 warp 的 lane 1..31 填 0，所以最终 CPU 合并为 `-5-4+4=-5`。不能凭“最后只一项”猜最后 partial 等于最终总数。
+
+### 15. Warp max 单位元
+
+0 会击败所有负数，不能作一般最大值单位元。可用 `-infinity`，或在不接受无穷输入的协议中用 `lowest()`；二者语义不同。还要明确空输入返回什么、一个/两个 NaN 如何合并、是否保留首个索引、是否允许无穷值，以及最终哪个 lane 的结果有效。
+
+### 16. shared 的三个顺序点
+
+删除第一次同步后，某 lane 可能在邻居完成写入前读取 `shared[lane^1]`。删除复用前的第二次同步后，较快 lane 可能覆盖自己的槽位，而邻居还在读取第一轮数据，形成读写重叠。最后一次同步保证第二轮覆盖完成后再读。`volatile` 不能建立这些跨线程 happens-before 关系。
+
+### 17. Warp 同步不能替代 block 同步
+
+96 线程分属三个 warp。`__syncwarp` 只为指定 warp 的参与者建立顺序，不能保证 warp 0 看见 warp 1、2 的 shared 部分和。写完每 warp 的 lane 0 后需要 block 级 `__syncthreads()`，且所有 block 线程以一致方式到达。
+
+### 18. n=1003、B=128
+
+block 数 `ceil(1003/128)=8`，每 block 4 个 warp。前七块覆盖 896 项，最后一块处理 107 个有效输入。各 warp 对无输入 lane 填 0，因此仍产生四个 warp 和；同步后 warp 0 的 32 lane 中只有前 4 个读取这四项，其余贡献 0，再做完整 warp 归约。
+
+### 19. 96 与 48
+
+96 是 32 的整数倍，恰有 3 个完整 warp，满足本程序的两级协议；它不必是 2 的幂。48 不是 32 的整数倍，本程序为保持所有参与 warp 完整而主动拒绝。这是示例算法/接口契约，不是 CUDA 禁止启动 48 线程 block 的硬件通用规定。
+
+### 20. 分支工作量与时间
+
+不能仅凭循环次数断言耗时等于两条路径成本之和。编译器可能谓词化、展开或消除计算，指令延迟和吞吐不同，独立线程调度与其他 warp 可隐藏停顿。需要保留可观察结果，核对生成代码，并用 CUDA Events、Nsight Systems/Compute 在固定输入和配置下多次测量；还要验证优化前后结果与内存流量。
+
+### 21. 对齐 warp 的分支
+
+按 warp 编号选择路径时，一个 warp 内通常所有 lane 取同一路径；按 lane 奇偶时，同一 warp 两组 lane 取不同路径，产生 warp 内分歧。前者只减少这种分歧，不会让另一 warp 的工作、block 的 shared/register 占用、调度等待或总指令量自动消失。
+
+### 22. 分支中的三问
+
+必须明确：实际哪些 lane 会到达调用；传入 mask 声明哪些 lane 属于同一实例；每个调用 lane 要读取的源 lane 是否也在契约中且拥有定义值。三者只要有一个不一致，就不能靠函数名中的 `_sync` 自动修复。
+
+### 23. 三种 collective 表达
+
+原始 shuffle 用显式 32 位 mask、源偏移和循环表达参与与路由，不需要 shared 临时存储，结果有效 lane 由算法说明。Cooperative Groups 用 `thread_block_tile<32>` 对象表达固定子组，调用 `tile.shfl_down`，仍需在有效 rank 消费结果。CUB `WarpReduce<T>` 用模板类型和逻辑 warp 配置，调用者提供 `TempStorage`，其 reduce 结果通常只在逻辑 warp 的 lane 0 有效；精确契约应查安装版本文档。
+
+### 24. CUB 临时存储复用
+
+collective 可能仍在经 shared 临时空间交换数据，提前复用会让下一操作覆盖前一操作尚需的内容。同步范围应覆盖所有可能访问同一存储的线程：每个 warp 有独立 TempStorage 且只在 warp 内复用时可按文档使用 warp/group 同步；多个 warp 共享或将结果交给整个 block 时需要 block 同步。不能一概把 `__syncwarp` 换成 `__syncthreads` 或反过来。
+
+### 25. Inclusive scan
+
+三轮为 `[1,3,5,7,9,11,13,15]`、`[1,3,6,10,14,18,22,26]`、`[1,3,6,10,15,21,28,36]`。所有声明参与的 lane 先调用 `__shfl_up_sync` 得到该轮旧值；只有 `rank>=delta` 才相加。若把调用放进该条件而仍传 full mask，低 rank 未到达却被声明参与，破坏 collective 契约。
+
+### 26. Exclusive scan
+
+可以先算 inclusive，然后所有 lane 再共同执行一次 `shifted=__shfl_up_sync(full,inclusive,1,8)`，最后令 `exclusive=(rank==0?0:shifted)`。输出是 `[0,1,3,6,10,15,21,28]`，首项使用加法单位元 0。注意 shuffle 仍由所有 lane 调用，条件只选择最终值。
+
+### 27. 独立 warp max
+
+完整 warp 中每 lane 令 `value=lane%9-4`，每轮所有 lane 执行 `other=__shfl_down_sync(0xffffffffu,value,offset)`，仅 `lane<offset` 时令 `value=max(value,other)`；lane 0 应得 4。若扩展到尾部输入，无数据 lane 应使用负无穷而不是 0。主机生成相同输入逐项求 max，检查 lane 0、错误码和完成状态；是否检查其他 lane 取决于你明确声明的输出契约。
+
+### 28. 公平对照实验
+
+固定 GPU、时钟/电源环境、Toolkit、架构选项、数据类型、输入内容、n、block 宽度、完成范围、预热、重复次数和验证方法；两种实现都必须产生同一完整 block partial 或完整归约结果。用 Event 测相同的 kernel/阶段范围，保存每批原始样本和 min/median/mean/max，不把 sanitizer 时间混入性能表。
+
+同时记录逐项/逐 block CPU 校验、输入未修改检查和 sanitizer 结果。潜在因素至少包括 GPU 架构与 shuffle/shared 实现、shared/register 用量造成的驻留变化、block 大小、内存带宽/缓存、时钟温度、编译器生成代码和输入规模。结论只适用于所测配置；occupancy 或屏障数量单独都不能预先决定胜者。
