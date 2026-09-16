@@ -1439,10 +1439,266 @@ global 越界→memcheck；shared WAW→racecheck；未初始化 global read→i
 
 ## 第 14 章
 
-1. inclusive `[2,3,6,8]`，exclusive `[0,2,3,6]`。
-2. 可在 exclusive 输出后加原输入，或调整 down-sweep/最终输出；最清晰是 `inclusive[i]=exclusive[i]+input[i]`。
-3. `flag=(x%2==0)`；exclusive scan 得 offset；flag 真线程写 `out[offset[i]]=x`；总数为最后 offset + last flag。
-4. CUB 先以 null temp 查询 bytes，再分配 temp 并再次调用；输出 count 和 stream 参数按当前 API 文档。
+### 1. 两种 scan 与交叉关系
+
+输入 `[2,1,3,2]`：
+
+```text
+exclusive = [0,2,3,6]
+inclusive = [2,3,6,8]
+total = 8
+```
+
+逐项都有 `inclusive[i]=exclusive[i]+input[i]`：`2=0+2`、`3=2+1`、`6=3+3`、`8=6+2`。除第 0 项外还有 `exclusive[i]=inclusive[i-1]`。最后 `total=inclusive[3]=exclusive[3]+input[3]=6+2`。只验证 total 会漏掉中间前缀错位。
+
+### 2. 空数组和单元素
+
+```text
+input=[]   → exclusive=[]，inclusive=[]，total=0
+input=[9]  → exclusive=[0]，inclusive=[9]，total=9
+```
+
+空 vector 没有最后一个元素，`.back()` 的前置条件不满足，不能用它求 total。应先判断 `empty()`，或让接口另外返回已在循环中维护的 running total。单元素 exclusive 的 0 表示“位置 0 之前没有输入”，不是把 9 丢了。
+
+### 3. 从 exclusive 得到 inclusive
+
+逐项加原输入：
+
+```text
+exclusive [0, 5, 3, 3]
+input     [5,-2, 0, 7]
+inclusive [5, 3, 3,10]
+```
+
+total 为 10。若只给 non-empty exclusive，最后一项仅表示最后元素之前的总和；不知道最后一个输入就无法一般地恢复 total。例如 exclusive `[0,5]` 既可能来自 `[5,1]`，total 6，也可能来自 `[5,100]`，total 105。
+
+### 4. 工作量到写入区间
+
+`count=[2,0,3,1]` 的 exclusive scan 是 `offset=[0,2,2,5]`。半开区间为：
+
+```text
+item 0: [0,2)
+item 1: [2,2)  空
+item 2: [2,5)
+item 3: [5,6)
+```
+
+总长度是最后 offset 加最后 count，即 `5+1=6`。半开区间便于用 `begin+length=end` 表达，也让空任务自然成为 `[2,2)`，不需要负长度或特殊终点。
+
+### 5. Reduction 与 scan
+
+对 `[3,1,7,0,4]`，sum reduction 只输出总和 15；exclusive scan 输出 `[0,3,4,11,11]`，inclusive 输出 `[3,4,11,11,15]`。reduction 允许丢弃产生总和后不再需要的中间节点，scan 的每个位置都是契约的一部分。
+
+例如错误输出 `[0,4,3,11,11]` 的最后 total 仍可由末项加最后输入得到 15，但位置 1、2 已错。总和正确只证明一个聚合约束，不能证明全部前缀。
+
+### 6. `max` 与减法
+
+输入合法范围为 `[-100,100]` 时，可选不大于所有输入的单位元 `-101`；若使用类型极值，也可选 `std::numeric_limits<int>::lowest()`。inclusive max scan：
+
+```text
+[3,-2,5,1] → [3,3,5,5]
+```
+
+`max` 满足结合律。减法不满足：`(10-3)-2=5`，`10-(3-2)=9`。并行树改变括号后会改变结果，因此不能把加号机械替换成减号并声称仍是同一个串行 scan。
+
+### 7. Doubling inclusive 快照
+
+每轮只能读该轮开始时的旧数组：
+
+```text
+初始: [1,2,3,4,5,6,7,8]
+d=1:  [1,3,5,7,9,11,13,15]
+d=2:  [1,3,6,10,14,18,22,26]
+d=4:  [1,3,6,10,15,21,28,36]
+```
+
+最后是 inclusive scan。若原地更新时让较后线程读到同轮刚写出的值，就把不同逻辑轮次混在一起；需要双缓冲或能严格保证同轮源值不被覆盖的协议。
+
+### 8. Blelloch 七步快照
+
+输入 `[2,5,1,3,0,4,2,1]`：
+
+```text
+up 1:   [2,7,1,4,0,4,2,3]
+up 2:   [2,7,1,11,0,4,2,7]
+up 4:   [2,7,1,11,0,4,2,18]
+root=0: [2,7,1,11,0,4,2,0]
+down 4: [2,7,1,0,0,4,2,11]
+down 2: [2,0,1,7,0,11,2,15]
+down 1: [0,2,7,8,11,11,15,17]
+```
+
+总和为 18，最终 exclusive 的最后项 17 再加最后输入 1 也得到 18。上山右端点保存区间和；下山把进入父区间前的前缀分别传给左右子区间。
+
+### 9. 16 项活动索引
+
+```text
+offset=1: (0,1),(2,3),(4,5),(6,7),(8,9),(10,11),(12,13),(14,15)
+offset=2: (1,3),(5,7),(9,11),(13,15)
+offset=4: (3,7),(11,15)
+offset=8: (7,15)
+```
+
+每对写成 `(index-offset,index)`：左项是左半区间的右端点，`index` 是整个长度 `2*offset` 区间的右端点。`tid+1` 把区间编号从 1 开始，乘 `2*offset` 得到区间右边界后一位，再减 1 得右端点。
+
+### 10. 根不清零的污染
+
+以 `[1,2,3,4]` 为例，up-sweep 后是 `[1,3,3,10]`。若保留根 10 直接 down-sweep，结果为 `[10,11,13,16]`，恰好是正确 exclusive `[0,1,3,6]` 每项都加了 total 10。
+
+根在 down-sweep 中代表“进入整个根区间之前已有多少”。exclusive scan 的这个前缀应是单位元 0，所以必须先保存 total，再把根改为 0。
+
+### 11. 删除层间屏障
+
+`offset=1` 会写 `data[1]`、`data[3]` 等，下一层 `offset=2` 立即读取它们；再下一层读取 `data[3]`、`data[7]`。这是跨线程、跨层的 read-after-write 依赖。
+
+无屏障时某次调度可能碰巧让前层写者先完成，十次输出都对；另一架构、优化级别或一次不同调度即可读到旧值。正确性必须来自同步协议，不来自有限次观察。racecheck 可以提供动态证据，但也只覆盖实际路径。
+
+### 12. 六项补零
+
+最小容量是 8：
+
+```text
+logical = [3,1,4,1,5,9]
+padded  = [3,1,4,1,5,9,0,0]
+exclusive 前6项 = [0,3,4,8,9,14]
+total = 23
+```
+
+0 是加法单位元，任何区间加上 padding 的 0 都不改变区间和。算法仍在完整 8 叶树上执行，最终只写前 6 个逻辑输出。
+
+### 13. 编译命令逐项解释
+
+- `nvcc`：CUDA 编译驱动，处理主机 C++、设备代码和 kernel 发射语法。
+- `-std=c++17`：使用 C++17 语言标准。
+- `-O2`：开启常用优化。
+- `-lineinfo`：保留设备行号，方便 profiler/Sanitizer 定位，同时保留优化。
+- `code/14_scan/single_block_scan.cu`：输入源文件。
+- `-o single_block_scan`：指定输出可执行文件名。
+
+257 项原地运行：
+
+```bash
+./single_block_scan 257 inplace
+```
+
+这里 257 是逻辑元素数，程序会把 capacity 算为 512；不是传入字节数或手工指定线程数。
+
+### 14. 条件屏障错误
+
+原代码只有 `index<capacity` 的部分线程到达 block barrier，参与集合不一致。应把条件只放在数据操作外：
+
+```cpp
+if (index < capacity) {
+    data[index] += data[index - offset];
+}
+__syncthreads();
+```
+
+没有本层算术任务的线程仍属于 block，必须经过同一轮屏障。还要避免它们在屏障之前提前 `return`。
+
+### 15. `n=257` 的分层边界
+
+level 0 有 `ceil(257/256)=2` blocks。block 0 覆盖全局索引 `[0,256)`；block 1 的逻辑范围是 `[256,257)`，tile 其余 255 项补零。若记第一 tile 总和为 S0，最后输入为 x256，则：
+
+```text
+block_sums=[S0,x256]
+block_offsets=[0,S0]
+```
+
+第 257 项即 `output[256]` 的 tile-local exclusive 是 0，加回 block offset S0，得到全局前 256 项总和。一般项等于 local prefix 加所在 block 之前的所有 block sums。
+
+### 16. 原地安全证明
+
+`single_block_scan` 先让所有线程执行 `data[tid]=input[tid]或0`，再过 block barrier；此后整棵树只访问 shared `data`，最终才把结果写到 output。因此 `input==output` 时，任何 global 覆盖都发生在全部所需输入已经复制之后。
+
+反例是每个线程按顺序从 global `input[i-1]` 读取前缀，同时写 `output[i]`，而两指针相同。较早写者可能覆盖较晚线程尚未读取的输入；没有快照/双缓冲和正确依赖时不能原地。是否安全取决于具体读写阶段，不取决于函数名叫 scan。
+
+### 17. 稳定流压缩手算
+
+```text
+input   = [-2,5,0,7,-1,3]
+flags   = [ 0,1,0,1, 0,1]
+offsets = [ 0,0,1,1, 2,2]
+```
+
+位置 1 写 `output[offsets[1]]=output[0]=5`；位置 3 写 `output[1]=7`；位置 5 写 `output[2]=3`。输出 `[5,7,3]`，count=`2+1=3`。被选项的 offset 严格递增，地址唯一且相对顺序保持。
+
+### 18. selected count 公式
+
+最后 flag 为 0：
+
+```text
+flags=[1,0]，offsets=[0,1]，count=1+0=1
+```
+
+最后 flag 为 1：
+
+```text
+flags=[0,1]，offsets=[0,0]，count=0+1=1
+```
+
+最后 offset 只统计最后位置之前的 1；当最后项也被选时，必须再加它自己的 flag。只用 offset 在第二例会错误得到 0。
+
+### 19. 改为保留偶数
+
+设备 flag 改为 `flags[index]=(input[index]%2==0)?1:0`；CPU reference 使用相同数学谓词独立生成 expected flags/output；输入模式应包含正负偶数、奇数、0、全选和全不选；提示改为明确 even compaction。
+
+exclusive scan 和 scatter 的结构不改：flag 仍是 0/1，选中线程仍写 `output[offsets[index]]`，count 公式也不改。注意 C++ 中负数 `%2==0` 对偶数仍成立，0 也是偶数；规格若不想保留 0，谓词必须另加条件。
+
+### 20. CUB 两阶段与复用
+
+第一次以 `d_temp_storage=nullptr` 调用，只查询并写回 `temp_storage_bytes`，不产生 offsets。按字节分配至少这么大的 device temporary storage 后，第二次传真实指针执行 scan。
+
+100 批相似规模可先查询所有批次所需最大字节数，分配一次足够大的 workspace，并在依赖正确的 stream 使用结束前保持其生命周期。每批只调用执行阶段；不要把查询、`cudaMalloc/cudaFree` 偷放进一种方法的核心计时区间。若并发 streams 可能同时使用 workspace，需要独立空间或库允许的安全资源管理，不能让重叠调用争用同一临时区。
+
+### 21. 前缀溢出
+
+`[1'500'000'000,1'500'000'000]` 的每项都适合 32 位有符号 int，总和 3,000,000,000 不适合。改为 `int64_t` 至少联动：device 输入/输出与 shared 类型、host vector/reference/running 类型、`sizeof` 分配和复制字节数、CUB 模板推导/接口指针、打印格式及边界验证；若使用原子或其他库原语还要确认对应类型支持。
+
+只改 host expected 会让 GPU 先溢出；只改设备 output 而输入阶段仍用 32 位 running 也不完整。还应证明 n 与输入范围的乘积不会越过 64 位。
+
+### 22. 浮点括号与验证
+
+常见 IEEE 双精度下，串行左折叠：
+
+```text
+((1e20+1)+-1e20)+1 → (1e20-1e20)+1 → 1
+```
+
+按两对分组：
+
+```text
+(1e20+1)+(-1e20+1) → 1e20 + -1e20 → 0
+```
+
+小量 1 在与大数相加时被舍去。验证可用 `abs(got-expected) <= atol + rtol*abs(expected)`，同时单独处理 NaN/Inf，并根据问题尺度选择 atol/rtol。CPU 左折叠只是一个参考顺序，不保证并行树逐位相等；还应记录算法、设备和库版本，检查多个前缀而非只看 total。
+
+### 23. 公平实验记录
+
+至少记录：GPU 型号、驱动、CUDA Toolkit、编译器/完整 flags、数据类型、运算与 inclusive/exclusive 语义、n、输入内容/生成种子、tile/block 配置、stream、预热次数、正式轮数、方法先后顺序、电源/时钟状态、同机负载、验证方法和 CUB 临时字节数。
+
+Event 区间包含每种方法完成同一个 device-wide scan 所需的全部设备工作；排除分配、H2D、D2H、哨兵、CPU 验证、统计和打印。手写实现不能只测 tile kernel 而漏掉递归和 add-back。轮换顺序减少温度/频率时间趋势与方法名绑定；每样本验证能发现偶发错误，轮后输入快照能发现某方法污染共同输入。保存完整样本和 min/median/mean/max，不只摘最快一次。
+
+### 24. 工具与命令矩阵
+
+- 尾块 global 越界：memcheck。
+- shared 层间竞争：racecheck。
+- 发散 block barrier：synccheck。
+- 未初始化 global input：initcheck。
+- 数学前缀错误：CPU oracle 逐项比较。
+- 性能波动：正常运行下多轮 Event 样本，并结合 profiler/环境记录。
+
+示例：
+
+```bash
+compute-sanitizer --tool memcheck ./single_block_scan 257 out
+compute-sanitizer --tool racecheck ./single_block_scan 257 inplace
+compute-sanitizer --tool synccheck ./single_block_scan 257 out
+compute-sanitizer --tool initcheck ./hierarchical_scan 65537 out
+./scan_benchmark 65537 15 4
+```
+
+前四条在工具插桩环境下的时间不能用于性能排名；第五条才是正常性能样本，但仍要确认所有输出和输入不变性检查通过。工具只覆盖实际路径，因此还要保留 0/1、255/256/257 和 65535/65536/65537 的正常测试矩阵。
 
 ## 第 15 章
 

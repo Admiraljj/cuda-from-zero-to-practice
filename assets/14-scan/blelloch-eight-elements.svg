@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="650" viewBox="0 0 1160 650" role="img" aria-labelledby="title desc">
+  <title id="title">8 个元素的 Blelloch exclusive scan</title>
+  <desc id="desc">从输入开始，经过三层上山、根清零和三层下山得到 exclusive scan。</desc>
+  <rect width="1160" height="650" rx="16" fill="#1e1e1e"/>
+  <style>
+    .h { fill:#d4d4d4; font:700 25px Consolas,monospace }
+    .label { fill:#9cdcfe; font:17px Consolas,monospace }
+    .small { fill:#808080; font:14px Consolas,monospace }
+    .cell { fill:#252526; stroke:#3c3c3c; stroke-width:2 }
+    .value { fill:#d4d4d4; font:18px Consolas,monospace; text-anchor:middle }
+    .changed { fill:#569cd6; stroke:#9cdcfe; stroke-width:2 }
+    .zero { fill:#2d3f2d; stroke:#6a9955; stroke-width:2 }
+    .arrow { stroke:#808080; stroke-width:2; marker-end:url(#end) }
+  </style>
+  <defs>
+    <marker id="end" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#808080"/></marker>
+  </defs>
+  <text x="36" y="42" class="h">Blelloch scan：上山收集，下山发放</text>
+  <text x="36" y="68" class="small">蓝色：本轮被改写的右端点　绿色：根设置为单位元 0</text>
+
+  <g id="rows">
+    <text x="36" y="123" class="label">输入</text>
+    <text x="36" y="188" class="label">up 1</text>
+    <text x="36" y="253" class="label">up 2</text>
+    <text x="36" y="318" class="label">up 4</text>
+    <text x="36" y="383" class="label">根=0</text>
+    <text x="36" y="448" class="label">down 4</text>
+    <text x="36" y="513" class="label">down 2</text>
+    <text x="36" y="578" class="label">down 1</text>
+  </g>
+
+  <g transform="translate(150,92)">
+    <g id="input">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="cell"/><text x="46" y="27" class="value">3</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="cell"/><text x="151" y="27" class="value">1</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="cell"/><text x="256" y="27" class="value">7</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="cell"/><text x="361" y="27" class="value">0</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="cell"/><text x="466" y="27" class="value">4</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="cell"/><text x="571" y="27" class="value">1</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="cell"/><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="cell"/><text x="781" y="27" class="value">3</text>
+    </g>
+
+    <g transform="translate(0,65)">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="cell"/><text x="46" y="27" class="value">3</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="changed"/><text x="151" y="27" class="value">4</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="cell"/><text x="256" y="27" class="value">7</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="changed"/><text x="361" y="27" class="value">7</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="cell"/><text x="466" y="27" class="value">4</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="changed"/><text x="571" y="27" class="value">5</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="cell"/><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="changed"/><text x="781" y="27" class="value">9</text>
+    </g>
+
+    <g transform="translate(0,130)">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="cell"/><text x="46" y="27" class="value">3</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="cell"/><text x="151" y="27" class="value">4</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="cell"/><text x="256" y="27" class="value">7</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="changed"/><text x="361" y="27" class="value">11</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="cell"/><text x="466" y="27" class="value">4</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="cell"/><text x="571" y="27" class="value">5</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="cell"/><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="changed"/><text x="781" y="27" class="value">14</text>
+    </g>
+
+    <g transform="translate(0,195)">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="cell"/><text x="46" y="27" class="value">3</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="cell"/><text x="151" y="27" class="value">4</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="cell"/><text x="256" y="27" class="value">7</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="cell"/><text x="361" y="27" class="value">11</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="cell"/><text x="466" y="27" class="value">4</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="cell"/><text x="571" y="27" class="value">5</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="cell"/><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="changed"/><text x="781" y="27" class="value">25</text>
+    </g>
+
+    <g transform="translate(0,260)">
+      <use href="#input"/>
+      <rect x="0" y="0" width="827" height="42" rx="5" fill="#252526" opacity="0.98"/>
+      <text x="46" y="27" class="value">3</text><text x="151" y="27" class="value">4</text><text x="256" y="27" class="value">7</text><text x="361" y="27" class="value">11</text>
+      <text x="466" y="27" class="value">4</text><text x="571" y="27" class="value">5</text><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="zero"/><text x="781" y="27" class="value">0</text>
+    </g>
+
+    <g transform="translate(0,325)">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="cell"/><text x="46" y="27" class="value">3</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="cell"/><text x="151" y="27" class="value">4</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="cell"/><text x="256" y="27" class="value">7</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="changed"/><text x="361" y="27" class="value">0</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="cell"/><text x="466" y="27" class="value">4</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="cell"/><text x="571" y="27" class="value">5</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="cell"/><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="changed"/><text x="781" y="27" class="value">11</text>
+    </g>
+
+    <g transform="translate(0,390)">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="cell"/><text x="46" y="27" class="value">3</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="changed"/><text x="151" y="27" class="value">0</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="cell"/><text x="256" y="27" class="value">7</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="changed"/><text x="361" y="27" class="value">4</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="cell"/><text x="466" y="27" class="value">4</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="changed"/><text x="571" y="27" class="value">11</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="cell"/><text x="676" y="27" class="value">6</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="changed"/><text x="781" y="27" class="value">16</text>
+    </g>
+
+    <g transform="translate(0,455)">
+      <rect x="0" y="0" width="92" height="42" rx="5" class="changed"/><text x="46" y="27" class="value">0</text>
+      <rect x="105" y="0" width="92" height="42" rx="5" class="changed"/><text x="151" y="27" class="value">3</text>
+      <rect x="210" y="0" width="92" height="42" rx="5" class="changed"/><text x="256" y="27" class="value">4</text>
+      <rect x="315" y="0" width="92" height="42" rx="5" class="changed"/><text x="361" y="27" class="value">11</text>
+      <rect x="420" y="0" width="92" height="42" rx="5" class="changed"/><text x="466" y="27" class="value">11</text>
+      <rect x="525" y="0" width="92" height="42" rx="5" class="changed"/><text x="571" y="27" class="value">15</text>
+      <rect x="630" y="0" width="92" height="42" rx="5" class="changed"/><text x="676" y="27" class="value">16</text>
+      <rect x="735" y="0" width="92" height="42" rx="5" class="changed"/><text x="781" y="27" class="value">22</text>
+    </g>
+  </g>
+</svg>
