@@ -155,6 +155,7 @@ CUDA launch 的 grid 不能照搬成零维启动；以后包装接口需要明�
 
 如果把初始化循环改错，报告可能首先指向写入 a[n]；如果只改验证循环，可能指向读 c[n]。修复的是循环边界，不是删掉检查器。还原正确条件后重新构建并运行检查。
 
+本地编辑环境没有 C++ 编译器，这些编译运行结果尚需在具备工具链的环境实际核验；第 1 章检查脚本不会把未执行的测试记作通过。
 
 ## 第 2 章
 
@@ -225,6 +226,7 @@ std::cout << "max resident threads/SM: "
 
 合格报告包括：已经获授权的执行环境、单次空可见列表命令、原始标准输出/错误、立即读取的退出码、正常环境对照结果。结论应为“这次进程没有可用 CUDA 设备，探针受控失败”，而不是“物理显卡坏了”或“整个服务器没装驱动”。
 
+本轮编辑环境没有 nvcc 和 GPU 实验条件，上述实际命令行为需要在自己的环境执行；本地完成的是文档/代码一致性检查。
 
 ## 第 3 章
 
@@ -329,6 +331,7 @@ nvcc -std=c++17 square_threads.cu -o square_threads
 
 目前结果由设备 printf 展示；第 5 章会把结果写入设备数组，再复制回 CPU 逐项验证，不依赖打印充当结果传输方式。
 
+本轮本地只执行文档静态检查和输出检查器的离线测试；上述 CUDA 程序的真实编译运行仍待 GPU 开发环境核验。
 
 ## 第 4 章
 
@@ -387,7 +390,7 @@ lane 7：x=7，y=9，z=27。lane 0 改自己的局部变量不会自动修改 la
 | 80 | 160 | 6 | 79 | 15 |
 | 100 | 200 | 8 | 99 | 3 |
 
-总记录数=2×threads；总 warp 数=2×ceil(threads/32)。最后一个线程的 lane=(threads-1)%32。修改源码后，提示文本与手算预期也应保持一致；不要把预期算错一律归咎于 GPU。
+总记录数=2×threads；总 warp 数=2×ceil(threads/32)。最后一个线程的 lane=(threads-1)%32。修改源码后，提示文本与检查器固定预期也应保持一致；不要把检查失败一律归咎于 GPU。
 
 ### 10. tid%4<2
 
@@ -626,7 +629,7 @@ cudaMemcpy2D(output.data(), row_bytes, d_output, output_pitch,
 
 ## 第 7 章
 
-对应本章14组练习。判断实验是否通过，应分别检查程序结果、工具报告和实际执行情况。
+对应新版14组练习。这里的“通过”必须说明是源码检查、检查器测试，还是实际设备验收。
 
 ### 1. 错误分层
 
@@ -1077,8 +1080,6 @@ shared_resources只查询，未启动shared_probe。它得到某个编译kernel�
 
 本章方案是10个有序kernel，每轮读取上一轮完整输入，写另一份输出；教学验证版每轮等待并核对，交换指针后继续。后续可研究同stream有序提交并减少主机等待，但仍保留轮间依赖，不在原数组中无保护地覆盖。
 
-> 本次发布仅包含第 1—10 章答案。后续章节完成教材化修订后再补入。
-
 ## 第 11 章
 
 ### 1. 输出数量与写者
@@ -1200,6 +1201,7 @@ stages_per_call=-1仅指没有查询CUB内部kernel数，不表示零工作或�
 先手算8项树及13项尾部，运行CPU模型核对轨迹；再编译block部分和，逐项检查partial；再验证多阶段长度和每阶段CPU参考；扩展双项、跨步和最大值边界；最后核对CUB与benchmark原始输入保护，运行正常sanitizer案例。
 
 返回成功仍不足以证明正确的情况包括：只核对最终总数导致抵消错误；只用全零输入掩盖漏写；仅看启动返回成功而没等待执行；只看isfinite却没比较数学结果；仅通过一次无竞争报告就推断所有并发路径安全；将静态模型通过当作GPU已编译运行。
+
 ## 第 12 章
 
 ### 1. 多维 block 的 lane
@@ -1332,3 +1334,199 @@ collective 可能仍在经 shared 临时空间交换数据，提前复用会让�
 固定 GPU、时钟/电源环境、Toolkit、架构选项、数据类型、输入内容、n、block 宽度、完成范围、预热、重复次数和验证方法；两种实现都必须产生同一完整 block partial 或完整归约结果。用 Event 测相同的 kernel/阶段范围，保存每批原始样本和 min/median/mean/max，不把 sanitizer 时间混入性能表。
 
 同时记录逐项/逐 block CPU 校验、输入未修改检查和 sanitizer 结果。潜在因素至少包括 GPU 架构与 shuffle/shared 实现、shared/register 用量造成的驻留变化、block 大小、内存带宽/缓存、时钟温度、编译器生成代码和输入规模。结论只适用于所测配置；occupancy 或屏障数量单独都不能预先决定胜者。
+
+## 第 13 章
+
+### 1. 普通 read-modify-write 丢更新
+
+一种交错是：A 读 5，B 读 5，A 算 6 并写 6，B 算 6 并写 6，最终为 6。前置 barrier 只保证大家到达更新阶段，后置 barrier 只等待大家离开；它们都没有阻止 A、B 在读与写之间交错。需要把同址 read-modify-write 本身变成 atomic，或重新设计为私有累加后合并。
+
+### 2. `atomicAdd` 的旧返回值
+
+最终 counter 为 14，四个 old 的集合恰好是 `{10,11,12,13}`。具体 lane 到旧值的映射未指定，不能断言 lane 0 是 10。验证应复制 lane 顺序记录用于观察，再排序检查集合。
+
+### 3. 四个不同概念
+
+Atomicity 回答一次单地址操作是否不可分割；thread scope 回答这种原子/同步关系覆盖哪些线程；memory order 约束原子操作与同线程前后其他地址访问的排序；barrier 要求参与线程到达阶段并建立其规定的可见性。它们可组合，但不能用一个词代替另三个。
+
+### 4. 4-bin reference
+
+结果是 `[2,1,4,1]`，总和为 8。total 能发现整体漏计或多计，却不能发现 bin 0 少 1、bin 1 多 1 这种互相抵消的错位，所以仍要逐 bin 对照。
+
+### 5. n=1031 的 cycle
+
+`1031=4×256+7`。每个 bin 先有 4 项，余下索引 1024—1030 对应 bin 0—6，所以 bin 0—6 为 5，bin 7 为 4，bin 255 也为 4。
+
+### 6. Grid-stride 所有权
+
+step=`2×4=8`。thread 0 处理 `0,8,16`；thread 3 处理 `3,11,19`；thread 7 处理 `7,15`。任意索引 i 可唯一写成 `i=(i%8)+k×8`，其余数决定唯一 global thread，商决定循环轮次。
+
+### 7. 两个 shared barrier
+
+初始化后的 barrier 保证任何线程开始 atomic 更新前，全部 local bins 已清零；删除后较快线程的加法可能被较慢线程随后清零。合并前 barrier 保证读取 local bin 的线程等待本 block 所有更新完成；删除后可能把未完成的局部计数提前合并。
+
+### 8. 64 线程清 256 bins
+
+```cpp
+for (int bin=threadIdx.x; bin<256; bin+=blockDim.x) local_bins[bin]=0;
+```
+
+thread 0 清 `0,64,128,192`；thread t 清 `t,t+64,t+128,t+192`。这是一种协作循环，不要求 threads 等于 bins。
+
+### 9. Two-phase 手算
+
+按 grid-stride owner，block 0 的 partial 是 `[2,0,2,0]`，block 1 是 `[0,1,2,1]`，按列相加得到 `[2,1,4,1]`。每个 block 只写 `partials[blockIdx.x][bin]` 自己的一行，每个单元又由约定线程唯一写入，因此不同 blocks 不会同址写，无需 global atomic。
+
+### 10. Partial 空间
+
+元素数 `480×256=122880`；32 位时 bytes=`122880×4=491520`，即 480 KiB。64 位时为 983040 bytes，即 960 KiB。还要联动 kernel 类型、shared bytes、host 容器、复制长度、格式化和对应 atomic 支持。
+
+### 11. 16-bin 映射
+
+0→0，15→0，16→1，31→1，255→15。`v%16` 按低 4 bit 分类，会让 0、16、32…进入同一 bin；`floor(v×16/256)` 则把连续区间 `[0,15]`、`[16,31]`…分组，规格不同。
+
+### 12. 跨批次溢出
+
+不够。若 bins 不清零，判断应基于对象生命周期内某 bin 的累计最坏值，例如已有值加所有后续批次热点上界是否超过 `2^32-1`。换 64 位至少修改 device/host 类型、`sizeof` 字节数、shared/partial 容量计算、atomic overload/字面量，并同步修改复制、打印和验证。
+
+### 13. 浮点顺序
+
+`(1e20f + -1e20f) + 3.25f = 3.25f`；`(1e20f + 3.25f) + -1e20f` 在常见 IEEE float 舍入下为 0。atomic 保证每次加法不被另一更新切开，却不固定线程获得的全序；不同合法顺序可产生不同舍入。
+
+### 14. CAS 重试
+
+A/B/C 先观察 0；A 的 CAS(0→1) 返回 0 并成功；B 的 CAS(0→1) 返回 1、失败，重算后 CAS(1→2) 返回 1 并成功；C 的旧比较失败后观察 2，达到 limit 并拒绝。成功集合为 `{0,1}`。成功条件是 CAS 返回的 actual 等于本轮 compare/observed，不是等于 desired。
+
+### 15. ABA
+
+ABA 是观察 A 后被暂停，其他线程把 A 改成 B 又改回 A，恢复线程只比较当前 A 而漏掉中间变化。本章 counter 单调增加且到 limit 停止，不会回到旧值。链表节点可能删除后复用同一地址，需要版本标签或安全内存回收，不能套用单调计数结论。
+
+### 16. `atomic` 与 `atomic_ref`
+
+`cuda::atomic<T,scope>` 对象本身拥有原子存储；`cuda::atomic_ref<T,scope>` 给已有且满足对齐/类型约束的 T 对象建立原子访问视图，不复制也不另分配。指针场景构造参数是被引用对象，因此写 `cuda::atomic_ref<unsigned int,cuda::thread_scope_device> ref(*p);`。
+
+### 17. Relaxed 与发布
+
+计数只要求 counter 自身的 read-modify-write 不丢失，不借它给其他地址排序，所以 relaxed 足够。发布协议要求 payload 的普通写先于 release flag，consumer 的 acquire 读到该发布值后再读 payload。system scope 扩大参与范围，不会自动增加缺失的 release/acquire 顺序；scope 和 order 是两条轴。
+
+### 18. 8-lane 聚合
+
+bin 2 的 lanes `{0,1,3}`、leader 0、popcount 3；bin 7 的 `{2,4}`、leader 2、popcount 2；bin 9 的 `{5,6,7}`、leader 5、popcount 3，共 3 次 bin atomic。若 32 lanes 的键全不同，每组一人，仍需 32 次，减少量为 0，还额外支付分组指令。
+
+### 19. 尾部 mask
+
+lanes 0—6 有效时 mask 低 7 位为 1，即 `0x0000007f`。所有 lane 先 ballot 才能以同一 full 参与集合生成 valid mask；无效 lane 的 bit 不在 valid mask，随后可离开。若先 return 而有效 lane 仍向 match 传 full mask，就声称已离开的 lanes 也必须调用同一 collective，违反参与契约。
+
+### 20. Benchmark 区间
+
+包含每个方法完成 histogram 所需 kernel：one-kernel 方法一个，two-phase 两个；排除输入生成/H2D、输出 memset、D2H、验证、分配和打印。two-phase 的 merge 是产生最终 bins 的必要工作，不能漏测。Gitems/s 只按输入元素数和时间换算，不知道缓存事务、partial 流量和 atomic 请求，不能称 DRAM GB/s。
+
+### 21. 分布假设
+
+hot 可能让 global 单址争用最严重，shared/warp/two-phase 有机会减少 global atomic；cycle 同 warp 重复少，warp 聚合可能收益小，shared/two-phase 仍改变内存层级；skew 介于两者。所有“可能”都受 GPU 架构、blocks、占用率、shared/global 原子吞吐和规模影响，必须在统一 benchmark 实测。
+
+### 22. 工具对应
+
+global 越界→memcheck；shared WAW→racecheck；未初始化 global read→initcheck；发散 `__syncthreads`→synccheck。后三个工具不顺便完成完整越界检查，非法地址还可能使后续报告失真，所以按官方建议先 memcheck。
+
+### 23. 扩展 B=64
+
+参数允许集合加入 64；映射公式仍是 `value*bin_count/256`；dynamic shared 为 `64×4=256 bytes/block`；host expected 使用相同映射并分配 64 项；打印与逐 bin 循环用运行时 B；测试覆盖边界 0/3/4/255、每 bin 4 个原始值、空/尾部输入。kernel 的协作清零、grid-stride 更新、两个 barrier 和合并循环本来都以 `bin_count` 为界，通常无需结构变化。
+
+### 24. Weighted histogram 设计
+
+规格应定义 value→bin、weight 类型/范围、NaN/Inf、空输入和允许误差。CPU reference 可用 double 按固定输入顺序累加；GPU 对每项执行 float atomicAdd。验证采用逐 bin 绝对+相对容差，total 不再等于 n，可改查权重总和但也需容差。风险包括顺序舍入、正负大数消减、NaN 传播、Inf、溢出/下溢和跨运行非确定性。若要求 bitwise reproducible，可固定分块与归约树、使用更高精度/补偿求和或专门可复现算法，并接受额外时间与空间。
+
+## 第 14 章
+
+1. inclusive `[2,3,6,8]`，exclusive `[0,2,3,6]`。
+2. 可在 exclusive 输出后加原输入，或调整 down-sweep/最终输出；最清晰是 `inclusive[i]=exclusive[i]+input[i]`。
+3. `flag=(x%2==0)`；exclusive scan 得 offset；flag 真线程写 `out[offset[i]]=x`；总数为最后 offset + last flag。
+4. CUB 先以 null temp 查询 bytes，再分配 temp 并再次调用；输出 count 和 stream 参数按当前 API 文档。
+
+## 第 15 章
+
+1. 去掉 padding 后转置读取 shared 列可能出现严重 bank conflict；正确性不变，性能指标恶化。
+2. `effective=2*n*sizeof(float)/seconds`；tiled 应显著接近 copy bandwidth，具体依 GPU。
+3. 原地转置会让线程读写重叠并产生竞争；方阵也需成对 tile 交换和对角 tile 特殊处理。
+4. 类型改为 double 后 bytes/element 翻倍；有效带宽公式也用 `sizeof(double)`。
+
+## 第 16 章
+
+1. 逐输出做长度 3 的行列点积，输出尺寸 2×2。
+2. TILE 32 为 1024 threads/block，shared 与寄存器压力更大，不保证最快；用资源报告和 Events。
+3. `-Xptxas=-v` 输出每 kernel registers、shared 等，分别记录 naive/tiled。
+4. kernel 最终写 `c=alpha*sum+beta*c`，因此必须初始化/传入原 C。
+5. cuBLAS 通常远快于教学 kernel，因多级 tiling、Tensor Core、流水线和架构专门调优。
+
+## 第 17 章
+
+1. Sobel X filter 可含负系数，输出应使用 float/signed 类型，不能直接压到 unsigned byte。
+2. shared tile `18×18`；256 threads 用 linear loop 加载 324 值，zero padding，barrier 后每线程读 3×3。
+3. clamp：`ix=min(max(ix,0),width-1)`，角落会重复边缘像素而不是补 0。
+4. box blur 可先水平再垂直；比较约 `2K` 运算与 `K²`，同时计入中间读写。
+5. 使用固定随机种子和非方形小尺寸；CPU double 参考逐元素比较。
+
+## 第 18 章
+
+1. `nsys profile -o transpose ./transpose`，GUI/summary 中找 kernel timeline。
+2. `ncu --set full --kernel-name regex:transpose_tiled ./transpose`，查看 Memory Workload/Shared sections。
+3. 用 NVTX push/pop 包围 initialization、H2D、kernel loop、D2H，并按安装方式链接 NVTX。
+4. 每次同步会让 CPU/GPU 串行并产生时间线空洞；末尾同步允许连续提交。
+
+## 第 19 章
+
+1. 使用同一 Release flags，保存 ptxas 输出；不同 kernel 函数会分别报告。
+2. shared/block 翻倍时，shared 限制下可驻留 blocks 最多约减半，实际还受分配粒度和其他限制。
+3. 比较时间和结果；occupancy 只是解释变量，不是排名目标。
+4. 降 register cap 后检查 ptxas 的 spill stores/loads 与 local memory traffic；变慢就撤销。
+
+## 第 20 章
+
+1. Systems 时间线中 H2D、kernel、D2H 是否在不同 engines 上重叠才是证据。
+2. pageable memory 可能出现 staging/同步，重叠减少；API 正确返回不代表并发。
+3. 形成二维实验表（streams×chunk），每项多次测量；更多 streams 不一定更快。
+4. 分别在前两 streams record events，让第三 stream wait 两个 events 后启动 merge。
+
+## 第 21 章
+
+1. 在 non-blocking stream begin capture，提交三 kernels，end、instantiate、循环 graph launch，末尾 stream synchronize。
+2. Systems 应显示 graph launch API 更少/更低 CPU 提交成本；GPU kernel 本身未必改变。
+3. 捕获失败后检查 `cudaStreamEndCapture`/相关返回码，销毁无效 graph，必要时重建 stream。
+4. 拓扑相同可用 whole graph update 或单 node parameter update；检查 update result，不成功则重新 instantiate。
+
+## 第 22 章
+
+1. 使用 zip/counting iterator 或自定义 functor：`y=alpha*x+y`，指定 device execution policy/iterators。
+2. 按临时存储查询—分配—执行—复制结果—释放流程。
+3. 确保同尺寸、同数据类型、同 math mode、warm-up 与计时范围；cuBLAS handle 在计时外创建。
+4. 至少使用 `M!=N!=K`，CPU 验证能暴露 leading dimension/交换错误。
+5. 由 device properties/官方表确认；设置 cuBLAS math/compute type，并报告相对误差。
+
+## 第 23 章
+
+1. 根 CMake 已列出全部正确性示例：配置架构、build、ctest。故障示例故意不加入测试。
+2. `.h` 声明 host wrapper；`.cu` 内定义 kernel 和 launch；`main.cpp` 只调用 wrapper。
+3. 根 CMake 已注册 transpose/matmul；CTest 非零退出即失败。
+4. 参考根 CMake 的 `BUILD_CUBLAS_EXAMPLE`、`find_package(CUDAToolkit)` 和 `CUDA::cublas`。
+
+## 第 24 章
+
+1. `cudaGetDeviceCount`；count<2 打印 SKIP；否则分 halves，分别 set device、allocate/copy/launch/copy back/sync/free。
+2. `efficiency=(T1/T2)/2`。小数据、传输共享和负载不均会降低。
+3. `nvidia-smi topo -m` 中 PIX/PXB/PHB/SYS/NV# 等表示不同路径，确切含义看该版本帮助。
+4. 双向分别调用 `cudaDeviceCanAccessPeer`；peer 能力可能非对称，传输也需两方向测。
+5. 按 A 的 rows 分片时，每张 GPU 需要对应 A slice 和完整 B，输出 C 按 rows 拼接；B 复制可能成为开销。
+
+## 第 25 章
+
+1. 减 max 不改变 softmax 比值，却把最大指数变成 1，避免正溢出并改善尺度。
+2. 一行内部需要两次 reduction，block 提供 shared/barrier；短行可用 warp，超长行可能需多 blocks。
+3. max 单位元是负无穷，sum 单位元是 0。
+4. 加载 local max 后、每层 reduction、切换 max→sum、每层 sum reduction 都需正确 barrier。
+5. 边界由 `col<cols` 循环保证；每行独占输出；memcheck/synccheck 和 CPU oracle 验证。
+6. 先 Systems 判断 launch/transfer，再 Compute 看 exp throughput、memory、barrier、occupancy，按 cols 分组分析。
+
+## 第 26 章
+
+毕业项目没有唯一代码答案。合格交付必须包含 specification、CPU reference、边界测试、sanitizer、可复现 benchmark、profiler 证据和 README。若只能运行但无法解释 mapping、同步与瓶颈，说明项目尚未完成。

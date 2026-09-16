@@ -3060,4 +3060,4 @@ Sanitizer 下的运行时间不能作为性能结果。没有报告也不是数�
 - [CCCL/CUB WarpReduce](https://nvidia.github.io/cccl/unstable/cub/api/classcub_1_1WarpReduce.html)：核对安装版本的类型、临时存储与有效输出。
 - [Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)：设备内存、竞争和同步检查工具。
 
-下一章：[原子操作与直方图（尚未发布）](README.md#后续章节)。
+下一章：[原子操作与直方图](13-原子操作与直方图.md)。

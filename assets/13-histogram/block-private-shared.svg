@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+  <title id="title">Block-private shared histogram 的三个阶段</title>
+  <desc id="desc">输入由三个线程块处理。每个线程块先清零自己的 shared local bins，经过第一次屏障后用 shared atomic 累计，经过第二次屏障后把局部计数原子合并到唯一的 global bins。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#9da5b4"/>
+    </marker>
+    <style>
+      .bg { fill: #1e1e1e; }
+      .panel { fill: #252526; stroke: #565656; stroke-width: 2; }
+      .block { fill: #2d2d30; stroke: #569cd6; stroke-width: 2; }
+      .barrier { fill: #3a3022; stroke: #d7ba7d; stroke-width: 2; }
+      .global { fill: #24352d; stroke: #6a9955; stroke-width: 2; }
+      .title { fill: #f0f0f0; font: 700 28px "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .label { fill: #d4d4d4; font: 600 20px "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .text { fill: #c8c8c8; font: 17px "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .small { fill: #b7b7b7; font: 15px "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+      .code { fill: #dcdcdc; font: 16px Consolas, monospace; }
+      .arrow { stroke: #9da5b4; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="720" rx="18"/>
+  <text class="title" x="600" y="46" text-anchor="middle">每个 Block 先做局部直方图，再合并到 Global</text>
+
+  <rect class="panel" x="40" y="80" width="250" height="560" rx="14"/>
+  <text class="label" x="165" y="115" text-anchor="middle">输入与线程分工</text>
+  <rect class="panel" x="68" y="145" width="194" height="90" rx="10"/>
+  <text class="code" x="165" y="178" text-anchor="middle">input[i]</text>
+  <text class="small" x="165" y="207" text-anchor="middle">grid-stride 覆盖全部索引</text>
+  <text class="text" x="68" y="280">Block 0 的线程</text>
+  <text class="text" x="68" y="340">Block 1 的线程</text>
+  <text class="text" x="68" y="400">Block 2 的线程</text>
+  <text class="small" x="68" y="476">同一输入值会选择同一个 bin，</text>
+  <text class="small" x="68" y="503">但不同 block 先写各自的副本。</text>
+  <text class="small" x="68" y="565">软件作用域：每 block 一份</text>
+  <text class="small" x="68" y="592">物理资源：驻留 SM 的 shared</text>
+
+  <path class="arrow" d="M290 290 C325 290, 325 185, 360 185"/>
+  <path class="arrow" d="M290 350 L360 350"/>
+  <path class="arrow" d="M290 410 C325 410, 325 515, 360 515"/>
+
+  <rect class="block" x="360" y="115" width="410" height="140" rx="14"/>
+  <text class="label" x="385" y="150">Block 0：shared local_bins[256]</text>
+  <text class="code" x="385" y="184">A. local_bins = 0</text>
+  <rect class="barrier" x="575" y="164" width="165" height="32" rx="8"/>
+  <text class="small" x="658" y="186" text-anchor="middle">barrier 1：清零完成</text>
+  <text class="code" x="385" y="225">B. atomicAdd(local_bins[value], 1)</text>
+
+  <rect class="block" x="360" y="280" width="410" height="140" rx="14"/>
+  <text class="label" x="385" y="315">Block 1：shared local_bins[256]</text>
+  <text class="code" x="385" y="349">A. local_bins = 0</text>
+  <rect class="barrier" x="575" y="329" width="165" height="32" rx="8"/>
+  <text class="small" x="658" y="351" text-anchor="middle">barrier 1：清零完成</text>
+  <text class="code" x="385" y="390">B. atomicAdd(local_bins[value], 1)</text>
+
+  <rect class="block" x="360" y="445" width="410" height="140" rx="14"/>
+  <text class="label" x="385" y="480">Block 2：shared local_bins[256]</text>
+  <text class="code" x="385" y="514">A. local_bins = 0</text>
+  <rect class="barrier" x="575" y="494" width="165" height="32" rx="8"/>
+  <text class="small" x="658" y="516" text-anchor="middle">barrier 1：清零完成</text>
+  <text class="code" x="385" y="555">B. atomicAdd(local_bins[value], 1)</text>
+
+  <rect class="barrier" x="805" y="138" width="170" height="82" rx="12"/>
+  <text class="label" x="890" y="169" text-anchor="middle">Barrier 2</text>
+  <text class="small" x="890" y="196" text-anchor="middle">本 block 累计完成</text>
+  <rect class="barrier" x="805" y="303" width="170" height="82" rx="12"/>
+  <text class="label" x="890" y="334" text-anchor="middle">Barrier 2</text>
+  <text class="small" x="890" y="361" text-anchor="middle">本 block 累计完成</text>
+  <rect class="barrier" x="805" y="468" width="170" height="82" rx="12"/>
+  <text class="label" x="890" y="499" text-anchor="middle">Barrier 2</text>
+  <text class="small" x="890" y="526" text-anchor="middle">本 block 累计完成</text>
+
+  <path class="arrow" d="M770 185 L805 180"/>
+  <path class="arrow" d="M770 350 L805 345"/>
+  <path class="arrow" d="M770 515 L805 510"/>
+  <path class="arrow" d="M975 180 C1010 180, 995 300, 1025 310"/>
+  <path class="arrow" d="M975 345 L1025 345"/>
+  <path class="arrow" d="M975 510 C1010 510, 995 390, 1025 380"/>
+
+  <rect class="global" x="1025" y="270" width="145" height="150" rx="14"/>
+  <text class="label" x="1098" y="305" text-anchor="middle">Global bins</text>
+  <text class="code" x="1098" y="340" text-anchor="middle">bins[256]</text>
+  <text class="small" x="1098" y="374" text-anchor="middle">C. 每个 block</text>
+  <text class="small" x="1098" y="398" text-anchor="middle">原子合并局部计数</text>
+
+  <text class="small" x="600" y="675" text-anchor="middle">Barrier 只同步同一 block；不同 block 的最终合并由 global atomic 保证单地址更新不丢失。</text>
+</svg>
