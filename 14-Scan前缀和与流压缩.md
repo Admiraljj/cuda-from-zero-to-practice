@@ -1877,6 +1877,6 @@ Scan 把“每项之前已经有多少”同时交给所有位置。它与 reduc
 
 下一章进入矩阵转置与合并访存。Scan 主要研究线程怎样合作传播数据依赖；转置则会把注意力移到二维索引、global memory 合并访问、shared tile 和 bank padding。请先确保自己能独立解释 `n=257` 的两层前缀，否则二维 tile 的“逻辑坐标与物理布局分离”会再次变得抽象。
 
-下一章将在完成教材化修订后发布：第 15 章“矩阵转置与合并访存”。
+下一章：[第 15 章：矩阵转置与合并访存](15-矩阵转置与合并访存.md)。
 
 主要参考：[NVIDIA GPU Gems 3：Parallel Prefix Sum (Scan) with CUDA](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda)、[CUDA Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/)、[CUB `DeviceScan` API](https://nvidia.github.io/cccl/unstable/cub/api/structcub_1_1DeviceScan.html)。

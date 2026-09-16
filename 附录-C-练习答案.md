@@ -1702,10 +1702,217 @@ compute-sanitizer --tool initcheck ./hierarchical_scan 65537 out
 
 ## 第 15 章
 
-1. 去掉 padding 后转置读取 shared 列可能出现严重 bank conflict；正确性不变，性能指标恶化。
-2. `effective=2*n*sizeof(float)/seconds`；tiled 应显著接近 copy bandwidth，具体依 GPU。
-3. 原地转置会让线程读写重叠并产生竞争；方阵也需成对 tile 交换和对角 tile 特殊处理。
-4. 类型改为 double 后 bytes/element 翻倍；有效带宽公式也用 `sizeof(double)`。
+### 1. 2×3 转置
+
+输入 shape 是 2 行 3 列，输出 shape 是 3 行 2 列：
+
+```text
+input  = [[1,2,3], [4,5,6]]
+output = [[1,4], [2,5], [3,6]]
+linear output = [1,4,2,5,3,6]
+```
+
+输入 `(row=1,col=2)` 的下标是 `1*3+2=5`，值为 6；输出坐标是 `(row'=2,col'=1)`，下标为 `2*2+1=5`。同为 5 只是这个元素和形状下的巧合，不代表转置一般保持线性下标。
+
+### 2. 一个 warp 的地址集合
+
+`height=3,width=5,row=1,col=0..4`：
+
+```text
+input indices  = 1*5 + [0,1,2,3,4] = [5,6,7,8,9]
+output indices = [0,1,2,3,4]*3 + 1 = [1,4,7,10,13]
+```
+
+输入相邻 lane 步长为 1 个元素，输出相邻 lane 步长为 `height=3` 个元素。分析合并访问要看同一 warp 的同一条访存指令产生的这组地址。
+
+### 3. 元素数不等于行跨度
+
+`n=width*height` 只说明总容量。输出 shape 为 `width` 行、`height` 列，所以输出的一行有 `height` 个元素；输入的一行才有 `width` 个元素。相同 n 可对应 2×6、3×4、1×12 等不同 shape，行跨度不能由 n 唯一恢复。
+
+### 4. CPU 转置与 `size_t`
+
+```cpp
+for (int row = 0; row < height; ++row) {
+    for (int col = 0; col < width; ++col) {
+        const std::size_t in =
+            static_cast<std::size_t>(row) * width + col;
+        const std::size_t out =
+            static_cast<std::size_t>(col) * height + row;
+        output[out] = input[in];
+    }
+}
+```
+
+转换要发生在乘法之前，使乘法按 `size_t` 宽度计算。若先用 32 位 int 算 `row*width`，溢出已经发生，事后再转换无法修复。
+
+### 5. 37×29 的两种 grid
+
+输入 width=37、height=29：
+
+```text
+direct_grid.x = ceil(37/32) = 2
+direct_grid.y = ceil(29/8)  = 4
+direct_grid   = (2,4)
+
+tiled_grid.x  = ceil(37/32) = 2
+tiled_grid.y  = ceil(29/32) = 1
+tiled_grid    = (2,1)
+```
+
+direct 中每线程一个元素；tiled 中每个 block 通过 j 循环覆盖 32 个逻辑行。
+
+### 6. 32×8 覆盖证明
+
+`tx∈[0,31]` 唯一确定 tile 列。对任意 tile 行 `r∈[0,31]`，可唯一写成：
+
+```text
+ty = r mod 8
+j  = r - ty ∈ {0,8,16,24}
+r  = ty+j
+```
+
+因此 32 个 tx、8 个 ty 和 4 个 j 共执行 `32*8*4=1024` 个位置，且每个 `(row,col)` 恰有一个所有者。
+
+### 7. grid.y 错除以 8
+
+正确 tile 高度是 32。错除以 8 会发射约四倍 y blocks；相邻 block 的 `blockIdx.y*32` 仍相差 32，所以前面 blocks 已覆盖全部输入，后续 blocks 大多完全越界，而不是覆盖重叠有效 tile。边界条件完整时数学结果可能仍正确，但大量 blocks 空跑，性能变差；若又把 block 基址错写成 `blockIdx.y*8`，则会产生重叠 tile、重复写甚至数据竞争。要同时检查 grid 数量和 block 基址公式，不能只看一个除数。
+
+### 8. 第 2 列的 bank
+
+`bank=(row*stride+col)%4`，col=2：
+
+```text
+[4][4]: [(0*4+2)%4, ..., (3*4+2)%4] = [2,2,2,2]
+[4][5]: [(0*5+2)%4, ..., (3*5+2)%4] = [2,3,0,1]
+```
+
+无 padding 是四个不同地址落同一 bank；padding 后分散到四个 bank。列号只让整体循环平移，不改变冲突阶数。
+
+### 9. padding 的 128 字节
+
+额外容量只有每行 1 个 float：
+
+```text
+32 rows * 1 float/row * 4 bytes/float = 128 bytes
+```
+
+无 padding 为 `32*32*4=4096` 字节，padded 为 `32*33*4=4224` 字节。
+
+### 10. 删除屏障的依赖
+
+加载阶段线程 `(tx=c,ty=r mod 8)` 写 `tile[r][c]`。写回阶段另一个线程通常读取 `tile[tx][ty+j]`；例如加载线程写 `tile[5][7]`，消费它的是读取第一维 5、第二维 7 的另一个线程。没有 block barrier，消费者可能在生产者写完前读到旧值或未初始化值。这是跨线程 read-after-write 依赖，单线程程序顺序不能解决。
+
+### 11. 越界线程不能提前 return
+
+尾 tile 中某线程这一次 load 可能越界，但它仍属于 block 屏障的参与集合，或者后续 j 可能有不同责任。若一部分线程 return、其余线程执行 `__syncthreads()`，参与集合不一致，行为非法并可能挂起或被 synccheck 报告。正确写法是让所有线程经过屏障，只把每次 load/store 放在边界 if 中。
+
+### 12. 两种交换
+
+- shared 下标从写 `[ty+j][tx]` 变为读 `[tx][ty+j]`：转置 tile 内元素；漏掉后，每个 tile 内容方向未转置。
+- 输出 block 基址交换 `blockIdx.x/y`：把输入 tile `(by,bx)` 放到输出 tile `(bx,by)`；漏掉后，tile 内可能正确，但整个 tile 位于错误区域。
+
+方阵对角 tile 可能掩盖 block 交换错误，所以必须测试非方阵和非对角 tile。
+
+### 13. 四种 oracle
+
+copy 的期望是 `expected[i]=input[i]`。naive、no-padding、padded 都使用 `expected[col*height+row]=input[row*width+col]`。copy 只提供连续读写基线，数学操作不是转置；若强迫共用转置 oracle，正确 copy 会被误判失败。
+
+### 14. byte sentinel
+
+`cudaMemset` 按字节填充，因此每 4 字节 float 的位模式是 `0xA5A5A5A5`，不是数值 165.0。全量验证可用它暴露 kernel 漏写的位置，也避免上一轮正确值残留掩盖错误。它不能可靠检测越界写、合法地址上的错位写、竞争或输入污染；这些还需独立 oracle、输入快照和 Sanitizer。
+
+### 15. 为什么可精确比较 float
+
+本章输入是 0～4095 的整数转成 float，这些值可精确表示；kernel 只搬运位模式，不做浮点算术，所以期望逐位不变，可用 `==`。向量加法、乘法、归约会发生舍入，运算顺序也可能改变，通常要使用绝对/相对误差并处理 NaN/Inf。
+
+### 16. 公平 Event 边界
+
+```text
+sentinel fill                不计时
+record(start)
+launch one full method       计时
+record(stop)
+synchronize(stop)
+elapsed(start,stop)
+D2H + full validation        不计时
+```
+
+分配、释放、H2D、D2H、CPU oracle、打印、统计和 sentinel 都排除。四种方法必须用同一范围定义；若研究端到端延迟，应另建实验并明确包含哪些传输。
+
+### 17. 轮换顺序
+
+固定顺序会把预热残余、升频、温度、cache 状态或后台负载趋势固定绑定到某个方法。`(round+position)%4` 得到：
+
+```text
+r0: copy, naive, no-padding, padded
+r1: naive, no-padding, padded, copy
+r2: no-padding, padded, copy, naive
+r3: padded, copy, naive, no-padding
+```
+
+它不能消除全部噪声，但让每种方法轮流处于四个位置。
+
+### 18. logical GB/s 手算
+
+```text
+n = 1000*500 = 500000 elements
+logical bytes = 2*n*4 = 4,000,000 bytes
+median = 0.050 ms = 0.000050 s
+logical GB/s = 4,000,000 / 0.000050 / 1e9 = 80 GB/s
+```
+
+分子只计一遍逻辑读和一遍逻辑写。跨步 store 可能产生额外 sectors，cache 和写合并也改变实际 DRAM 流量，所以它不是硬件 DRAM throughput。
+
+### 19. 两个 ncu 命令
+
+```bash
+ncu --section MemoryWorkloadAnalysis_Tables \
+    --kernel-name-base demangled \
+    --kernel-name 'regex:.*transpose_tiled_kernel<0>.*' \
+    --launch-count 1 ./transpose 4096 4096 3 1
+
+ncu --section MemoryWorkloadAnalysis_Tables \
+    --kernel-name-base demangled \
+    --kernel-name 'regex:.*transpose_tiled_kernel<1>.*' \
+    --launch-count 1 ./transpose 4096 4096 3 1
+```
+
+demangled 基础保留可读函数签名和模板实参，使 `<0>`、`<1>` 可区分。若版本自动简化名称导致不匹配，先放宽 filter 观察实际名称，再收紧。
+
+### 20. 哪些 profiler 字段
+
+naive 跨步 store：优先比较 L1/TEX 的 global store Requests、Sectors、Sectors/Req；相同活跃 lane 下更高 sectors/request 常提示更分散。padding：比较 Shared Memory load 的 Requests、Wavefronts、Bank Conflicts；冲突会把请求拆成更多串行 wavefront。
+
+duration 只能证明最终时间不同，不能单独证明是哪一级内存机制导致；频率、同步、整数指令和资源驻留也会影响时间。地址推导、受控版本和对应计数器共同构成机制证据。
+
+### 21. 整方阵通过、非方阵失败
+
+优先检查：输出 shape 是否为 width×height；output stride 是否使用 height；写回条件是否是 `output_col<height && output_row<width`；blockIdx 是否交换；输入和输出尾 tile 是否分别守界；grid 是否按逻辑 tile 32 计算。小复现可用 37×29、29×37、33×31、1×37、37×1，并启用 sentinel、全量 oracle 和 memcheck。
+
+### 22. leading dimension
+
+以元素为单位：
+
+```text
+input_index  = row * input_ld  + col
+output_index = col * output_ld + row
+```
+
+若 API 给的是 pitch bytes，不能直接与元素列号相加。可按 `char* row_base = (char*)base + row*pitch_bytes` 找行首，再转成 `T*` 访问 col；或在确认 pitch 能整除 `sizeof(T)` 后转换成元素 ld，并明确接口单位。
+
+### 23. 原地转置协议
+
+本章 block 读一个输入 tile 后会写另一个全局 tile。输入输出别名时，它可能覆盖尚未被另一个 block 读取的数据，blocks 之间又没有普通 kernel 内全局屏障。方阵中，对角 tile 可在自身暂存后转置；非对角 `(i,j)` 与 `(j,i)` 必须由唯一 block/协作单元同时读入两份安全暂存，再交换写回，且每对只处理一次。非方阵还涉及不同置换周期，不能直接套用此方案。
+
+### 24. 提交前证据包
+
+- 正确性：2×3 手算、独立 CPU oracle、宽/高/单行/单列/整 tile/尾 tile 全量比较。
+- 内存安全：真实 GPU 上运行 Compute Sanitizer memcheck，保留命令、返回码和日志。
+- 同步：代码证明所有线程一致过 barrier，并在真实 GPU 上运行 synccheck；必要时 racecheck。
+- 性能：真实 GPU 正常运行的 Event 原始样本、min/median/mean/max、编译 flags、GPU/驱动/Toolkit、尺寸和预热轮数。
+- profiler：真实 GPU 的 `.ncu-rep`，包含 global store sectors/request、shared requests/wavefronts/bank conflicts 与 launch shared bytes，并把结论与地址推导对应。
+
+手算和 CPU 模型可离线完成；CUDA 编译、kernel 输出、Sanitizer、Event 数字和硬件计数器必须来自实际 GPU 环境。没有运行就应标为 NOT RUN，不能用预期格式代替结果。
 
 ## 第 16 章
 

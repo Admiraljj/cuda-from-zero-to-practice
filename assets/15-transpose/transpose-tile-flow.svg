@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">Shared-memory tiled matrix transpose data flow</title>
+  <desc id="desc">A dark diagram showing coalesced row loads from an input tile, staging into shared memory, swapped shared indices and tile coordinates, and coalesced row stores to the transposed output tile.</desc>
+  <defs>
+    <style>
+      .bg { fill: #1e1e1e; }
+      .panel { fill: #252526; stroke: #5a5d5e; stroke-width: 2; }
+      .cell { fill: #2d2d30; stroke: #6a6a6a; stroke-width: 1; }
+      .hot { fill: #173f5f; stroke: #4fc1ff; stroke-width: 2; }
+      .read { fill: #244f32; stroke: #89d185; stroke-width: 2; }
+      .pad { fill: #3a2f1f; stroke: #d7ba7d; stroke-width: 1.5; stroke-dasharray: 5 4; }
+      .title { fill: #d4d4d4; font: 700 27px 'Segoe UI', sans-serif; }
+      .label { fill: #d4d4d4; font: 600 19px 'Segoe UI', sans-serif; }
+      .small { fill: #cccccc; font: 15px 'Segoe UI', sans-serif; }
+      .code { fill: #ce9178; font: 15px Consolas, monospace; }
+      .idx { fill: #dcdcaa; font: 14px Consolas, monospace; text-anchor: middle; dominant-baseline: middle; }
+      .arrow-green { stroke: #89d185; stroke-width: 4; fill: none; marker-end: url(#greenHead); }
+      .arrow-blue { stroke: #4fc1ff; stroke-width: 4; fill: none; marker-end: url(#blueHead); }
+      .arrow-gold { stroke: #d7ba7d; stroke-width: 3; fill: none; marker-end: url(#goldHead); }
+    </style>
+    <marker id="greenHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#89d185"/>
+    </marker>
+    <marker id="blueHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4fc1ff"/>
+    </marker>
+    <marker id="goldHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d7ba7d"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1200" height="650" rx="16"/>
+  <text class="title" x="600" y="42" text-anchor="middle">32×32 tile 转置：两端按行，中间交换视角</text>
+
+  <rect class="panel" x="35" y="78" width="330" height="430" rx="12"/>
+  <rect class="panel" x="435" y="78" width="330" height="430" rx="12"/>
+  <rect class="panel" x="835" y="78" width="330" height="430" rx="12"/>
+
+  <text class="label" x="200" y="112" text-anchor="middle">1. 输入 global tile</text>
+  <text class="label" x="600" y="112" text-anchor="middle">2. shared tile[32][33]</text>
+  <text class="label" x="1000" y="112" text-anchor="middle">3. 输出 global tile</text>
+
+  <!-- input 4x4 teaching tile -->
+  <g transform="translate(89 150)">
+    <rect class="read" x="0" y="0" width="56" height="56"/><rect class="read" x="56" y="0" width="56" height="56"/><rect class="read" x="112" y="0" width="56" height="56"/><rect class="read" x="168" y="0" width="56" height="56"/>
+    <rect class="cell" x="0" y="56" width="56" height="56"/><rect class="cell" x="56" y="56" width="56" height="56"/><rect class="cell" x="112" y="56" width="56" height="56"/><rect class="cell" x="168" y="56" width="56" height="56"/>
+    <rect class="cell" x="0" y="112" width="56" height="56"/><rect class="cell" x="56" y="112" width="56" height="56"/><rect class="cell" x="112" y="112" width="56" height="56"/><rect class="cell" x="168" y="112" width="56" height="56"/>
+    <rect class="cell" x="0" y="168" width="56" height="56"/><rect class="cell" x="56" y="168" width="56" height="56"/><rect class="cell" x="112" y="168" width="56" height="56"/><rect class="cell" x="168" y="168" width="56" height="56"/>
+    <g class="idx"><text x="28" y="28">a00</text><text x="84" y="28">a01</text><text x="140" y="28">a02</text><text x="196" y="28">a03</text>
+      <text x="28" y="84">a10</text><text x="84" y="84">a11</text><text x="140" y="84">a12</text><text x="196" y="84">a13</text>
+      <text x="28" y="140">a20</text><text x="84" y="140">a21</text><text x="140" y="140">a22</text><text x="196" y="140">a23</text>
+      <text x="28" y="196">a30</text><text x="84" y="196">a31</text><text x="140" y="196">a32</text><text x="196" y="196">a33</text></g>
+  </g>
+
+  <!-- shared 4x4 + padding model -->
+  <g transform="translate(476 150)">
+    <rect class="hot" x="0" y="0" width="56" height="56"/><rect class="cell" x="56" y="0" width="56" height="56"/><rect class="cell" x="112" y="0" width="56" height="56"/><rect class="cell" x="168" y="0" width="56" height="56"/><rect class="pad" x="224" y="0" width="45" height="56"/>
+    <rect class="hot" x="0" y="56" width="56" height="56"/><rect class="cell" x="56" y="56" width="56" height="56"/><rect class="cell" x="112" y="56" width="56" height="56"/><rect class="cell" x="168" y="56" width="56" height="56"/><rect class="pad" x="224" y="56" width="45" height="56"/>
+    <rect class="hot" x="0" y="112" width="56" height="56"/><rect class="cell" x="56" y="112" width="56" height="56"/><rect class="cell" x="112" y="112" width="56" height="56"/><rect class="cell" x="168" y="112" width="56" height="56"/><rect class="pad" x="224" y="112" width="45" height="56"/>
+    <rect class="hot" x="0" y="168" width="56" height="56"/><rect class="cell" x="56" y="168" width="56" height="56"/><rect class="cell" x="112" y="168" width="56" height="56"/><rect class="cell" x="168" y="168" width="56" height="56"/><rect class="pad" x="224" y="168" width="45" height="56"/>
+    <g class="idx"><text x="28" y="28">a00</text><text x="84" y="28">a01</text><text x="140" y="28">a02</text><text x="196" y="28">a03</text>
+      <text x="28" y="84">a10</text><text x="84" y="84">a11</text><text x="140" y="84">a12</text><text x="196" y="84">a13</text>
+      <text x="28" y="140">a20</text><text x="84" y="140">a21</text><text x="140" y="140">a22</text><text x="196" y="140">a23</text>
+      <text x="28" y="196">a30</text><text x="84" y="196">a31</text><text x="140" y="196">a32</text><text x="196" y="196">a33</text></g>
+    <text class="small" x="246" y="243" text-anchor="middle">padding</text>
+  </g>
+
+  <!-- output transpose -->
+  <g transform="translate(888 150)">
+    <rect class="hot" x="0" y="0" width="56" height="56"/><rect class="hot" x="56" y="0" width="56" height="56"/><rect class="hot" x="112" y="0" width="56" height="56"/><rect class="hot" x="168" y="0" width="56" height="56"/>
+    <rect class="cell" x="0" y="56" width="56" height="56"/><rect class="cell" x="56" y="56" width="56" height="56"/><rect class="cell" x="112" y="56" width="56" height="56"/><rect class="cell" x="168" y="56" width="56" height="56"/>
+    <rect class="cell" x="0" y="112" width="56" height="56"/><rect class="cell" x="56" y="112" width="56" height="56"/><rect class="cell" x="112" y="112" width="56" height="56"/><rect class="cell" x="168" y="112" width="56" height="56"/>
+    <rect class="cell" x="0" y="168" width="56" height="56"/><rect class="cell" x="56" y="168" width="56" height="56"/><rect class="cell" x="112" y="168" width="56" height="56"/><rect class="cell" x="168" y="168" width="56" height="56"/>
+    <g class="idx"><text x="28" y="28">a00</text><text x="84" y="28">a10</text><text x="140" y="28">a20</text><text x="196" y="28">a30</text>
+      <text x="28" y="84">a01</text><text x="84" y="84">a11</text><text x="140" y="84">a21</text><text x="196" y="84">a31</text>
+      <text x="28" y="140">a02</text><text x="84" y="140">a12</text><text x="140" y="140">a22</text><text x="196" y="140">a32</text>
+      <text x="28" y="196">a03</text><text x="84" y="196">a13</text><text x="140" y="196">a23</text><text x="196" y="196">a33</text></g>
+  </g>
+
+  <path class="arrow-green" d="M 320 178 C 385 138, 410 138, 478 178"/>
+  <text class="small" x="400" y="135" text-anchor="middle">warp 沿行连续 load</text>
+  <path class="arrow-blue" d="M 530 385 C 650 430, 770 210, 890 178"/>
+  <text class="small" x="703" y="393" text-anchor="middle">读 tile[tx][ty+j]</text>
+  <text class="small" x="703" y="414" text-anchor="middle">warp 沿输出行连续 store</text>
+  <path class="arrow-gold" d="M 612 145 C 650 118, 681 122, 699 152"/>
+  <text class="small" x="688" y="101" text-anchor="middle">shared 索引交换</text>
+
+  <text class="code" x="200" y="432" text-anchor="middle">input[row * width + col]</text>
+  <text class="code" x="600" y="432" text-anchor="middle">write [ty+j][tx]</text>
+  <text class="code" x="600" y="457" text-anchor="middle">read  [tx][ty+j]</text>
+  <text class="code" x="1000" y="432" text-anchor="middle">output[row' * height + col']</text>
+
+  <line x1="55" y1="532" x2="1145" y2="532" stroke="#5a5d5e" stroke-width="1"/>
+  <text class="label" x="600" y="565" text-anchor="middle">两种交换解决不同层级</text>
+  <text class="small" x="600" y="594" text-anchor="middle">tile[ty+j][tx] → tile[tx][ty+j]：tile 内转置</text>
+  <text class="small" x="600" y="620" text-anchor="middle">blockIdx.x ↔ blockIdx.y：把整个 tile 放到转置后的矩阵位置</text>
+</svg>
