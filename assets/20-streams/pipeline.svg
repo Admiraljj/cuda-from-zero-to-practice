@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:22px}.title{font-size:30px;font-weight:bold}.small{font-size:19px}</style></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<text x="35" y="50" class="title">分块流水线：每槽同序，跨槽可重叠，复用前先完成并消费</text>
+<rect x="35" y="95" width="1130" height="75" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<rect x="35" y="195" width="1130" height="75" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<rect x="35" y="295" width="1130" height="75" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<text x="55" y="140">slot 0：chunk 0  H2D → kernel → D2H → done → consume</text>
+<text x="55" y="240">slot 1：chunk 1  H2D → kernel → D2H → done → consume</text>
+<text x="55" y="340">slot 0：chunk 2  必须等 chunk 0 的 done，且旧输出已取走</text>
+<text x="55" y="455">n=23，chunk=8：区间 [0,8)、[8,16)、[16,23)</text>
+<text x="55" y="515">control start → workers wait start → latest done 全部汇合 → control stop</text>
+<text x="55" y="585" class="small">图表示依赖关系，不承诺实际重叠；GPU 时间线用于确认执行交叠。</text>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:22px}.title{font-size:30px;font-weight:bold}.small{font-size:19px}</style></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<text x="35" y="50" class="title">教学时间线：host 提交、等待与 GPU 执行是不同区间</text>
+<rect x="45" y="170" width="310" height="48" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<rect x="665" y="170" width="310" height="48" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<rect x="45" y="445" width="310" height="40" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<rect x="355" y="445" width="310" height="40" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<rect x="665" y="445" width="310" height="40" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<text x="55" y="125">sync：提交 K0 → host 等完成 → 提交 K1 → host 等完成</text>
+<text x="170" y="202">K0</text>
+<text x="465" y="202" class="small">提交间隙</text>
+<text x="790" y="202">K1</text>
+<text x="55" y="250">sync 的 GPU 轨道：每次等待后，host 才继续提交</text>
+<text x="55" y="400">queued：host 提交 K0、K1、K2，最后等待完成</text>
+<text x="170" y="474">K0</text>
+<text x="480" y="474">K1</text>
+<text x="790" y="474">K2</text>
+<text x="55" y="530">queued 的 GPU 轨道：可提前获得后续任务，仍可能出现供给空隙</text>
+<text x="55" y="605" class="small">这是示意，不是实测；API duration 与 kernel duration 分别在 CPU / GPU 轨道。</text>
+</svg>

@@ -2345,6 +2345,6 @@ compute-sanitizer --tool memcheck --error-exitcode 99 ./matmul_cublas 37 29 23 3
 
 第三次再加入 Event 和库对照。先从 C^T=B^T A^T 推导参数，选定精度与验证协议，然后才采集时间。你交付的应是能解释维度、通过边界与数值验证、可复现实验的程序。
 
-下一章把这种“定义任务→CPU oracle→线程分工→shared 复用→边界与验证”的方法用于图像卷积。第 17 章仍待教材化完善；其重点是 filter、halo 与不同边界策略。
+下一章把这种“定义任务→CPU oracle→线程分工→shared 复用→边界与验证”的方法用于[图像卷积](17-卷积与Stencil.md)，重点是 filter、halo 与不同边界策略。
 
 本章主要核对资料：[CUDA Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/)、[CUDA Best Practices：矩阵复用](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html#shared-memory-in-matrix-multiplication-c-ab)、[cuBLAS GEMM](https://docs.nvidia.com/cuda/cublas/index.html#cublasgemmex)、[Nsight Compute CLI](https://docs.nvidia.com/nsight-compute/NsightComputeCli/index.html)。所有手算、配套程序和示意图按本章教学任务重新编写。

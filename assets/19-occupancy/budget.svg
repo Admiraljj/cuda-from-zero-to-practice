@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:22px}.title{font-size:30px;font-weight:bold}.small{font-size:19px}</style></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<text x="35" y="50" class="title">假想 SM 预算：最严格的资源决定粗略驻留上限</text>
+<rect x="35" y="235" width="1130" height="235" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<rect x="35" y="495" width="1130" height="68" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<text x="55" y="125">SM：2048 线程 / 65536 寄存器 / 98304 shared bytes / 32 blocks</text>
+<text x="55" y="190">候选 block：256 线程；每线程 64 个寄存器；32768 shared bytes</text>
+<text x="55" y="285">线程：2048/256 = 8 blocks</text>
+<text x="55" y="340">寄存器：65536/(256×64) = 4 blocks</text>
+<text x="55" y="395">shared：98304/32768 = 3 blocks</text>
+<text x="55" y="450">架构：32 blocks</text>
+<text x="55" y="540">min(8,4,3,32) = 3 blocks → 24 warps → 24/64 = 37.5%</text>
+<text x="55" y="600" class="small">仅为教学预算，忽略分配粒度；真实设备用 Occupancy API 与 profiler 核对。</text>
+</svg>

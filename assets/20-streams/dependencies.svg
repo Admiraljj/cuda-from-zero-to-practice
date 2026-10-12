@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:22px}.title{font-size:30px;font-weight:bold}.small{font-size:19px}</style></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<text x="35" y="50" class="title">Event 汇合：consumer 的前置条件是两份输入都就绪</text>
+<rect x="35" y="95" width="1130" height="65" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<rect x="35" y="190" width="1130" height="65" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<rect x="35" y="310" width="1130" height="180" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<text x="55" y="140">stream A：produce(a=1) → record ready_a</text>
+<text x="55" y="235">stream B：produce(b=2) → record ready_b</text>
+<text x="55" y="355">consumer：wait ready_a → wait ready_b → merge(a,b,c)</text>
+<text x="55" y="410">                                  ↓</text>
+<text x="55" y="470">                         record done</text>
+<text x="55" y="560">host：等 done → 回读并验证 c=3；wait 本身不是 host 等待。</text>
+<text x="55" y="615" class="small">先 record，再提交保护 consumer 的 wait；队列名字不会自动建立数据依赖。</text>
+</svg>

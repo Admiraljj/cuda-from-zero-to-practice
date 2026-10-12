@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:22px}.title{font-size:30px;font-weight:bold}.small{font-size:19px}</style></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<text x="35" y="50" class="title">二维输入暂存：输出 tile + 四边与四角 halo</text>
+<rect x="40" y="100" width="540" height="320" rx="10" fill="#303b44" stroke="#718394" stroke-width="2"/>
+<rect x="105" y="195" width="410" height="160" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<rect x="620" y="100" width="540" height="320" rx="10" fill="#252526" stroke="#718394" stroke-width="2"/>
+<text x="70" y="135">输入 shared tile：18×18，R=1</text>
+<text x="125" y="245">16×16 输出位置</text>
+<text x="125" y="310">从 (ty,tx) 的 3×3 窗口读取</text>
+<text x="650" y="150">block=(16,16)：256 个线程</text>
+<text x="650" y="205">输入起点 = 输出块起点 − (R,R)</text>
+<text x="650" y="260">324 个 shared 槽位完整写入</text>
+<text x="650" y="315">tid 0..67 加载两项；其余一项</text>
+<text x="55" y="480">线性加载：L=tid、tid+256、...；shared_y=L/18，shared_x=L%18</text>
+<text x="55" y="530">加载或补边界值 → block 屏障 → 合法线程计算一个输出</text>
+<text x="55" y="580">图中边带与四角都属于 halo；不能只装中心 16×16。</text>
+</svg>

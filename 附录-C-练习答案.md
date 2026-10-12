@@ -2045,3 +2045,397 @@ __global__ void gemm_strided(const float* a, const float* b, float* c,
 host 检查 lda≥K、ldb≥N、ldc≥N，使用 size_t 分配 A=M×lda、B=K×ldb、C=M×ldc 个 float，再乘 sizeof(float) 得 bytes。初始化合法 A/B/C_old，padding 写已知 sentinel；CPU 按同一 stride 与 alpha/beta 做 double 参考。每次重复实验恢复相同 C_old，并在计算后检查合法输出、A/B 不变及 C padding 不变。
 
 一个有用用例是 M=3/K=5/N=2、lda=8/ldb=4/ldc=5，alpha=2/beta=3。另测 beta=0，令合法旧 C 为 NaN，验证实现确实不读取旧值；测 beta=1 时按每次恢复的约定验证。扩展为 tiled 时 global 下标用实际 stride，shared 内下标与阶段协议仍保持本章结构。
+
+## 第 17 章
+
+### 1. 图像与filter下标
+
+图像下标为2×5+3=13；按float为从输入首地址起52bytes。R=2，边长5，共25个系数。图像shape和filter shape是两张不同矩阵，不能拿filter下标访问输入。
+
+### 2. 中心九项
+
+分子依次7、16、9、24、52、28、17、36、19，总和208，除16为13。输出坐标固定，变化的是filter局部坐标和对应输入位置；此例为对称平滑，不证明非对称filter的方向正确。
+
+### 3. Zero角落
+
+有效项为中心4×1、右2×2、下2×6、右下1×7，共27，结果1.6875。图像外值定义为零，原filter保持不变。按有效权重和重新除法会实现另一种归一化边界，不能混入当前oracle。
+
+### 4. Clamp角落
+
+邻域为[1 1 2;1 1 2;6 6 7]，分子40，结果2.5。输入(0,0)因负x/y被映射回来出现四次；边缘其他元素也可能重复，重复是clamp契约的一部分。
+
+### 5. Sobel方向
+
+中心corr=(-7+9)+(-24+28)+(-17+19)=8；旋转filter后为−8。Gaussian旋转后不变，因此即使漏掉翻转也可能全部通过Gaussian测试。至少保留一个非对称/有方向filter。
+
+### 6. 非对称测试
+
+corr=7+16−13+42+34+19=105；旋转180°的filter为[1 0 2;3 -1 0;0 2 1]，conv=7+18+36−13+36+19=103。两套期望独立计算，再验证GPU，不从GPU结果反推oracle。
+
+### 7. Grid
+
+grid.x=ceil(131/16)=9、grid.y=ceil(97/16)=7，共63blocks。线程总数63×256=16128，合法输出131×97=12707。shared协作不能仅让这12707个输出所有者参与加载。
+
+### 8. 负坐标
+
+负数转size_t成为很大的无符号值，计算地址就越界。先按有符号ix/iy判断zero或clamp，再将合法行转换为size_t进行乘法。size_t用于容量/地址安全，不替代数学边界检查。
+
+### 9. Shared预算
+
+R1：18×18×4=1296bytes；R4：24×24×4=2304bytes。包含四角halo，声明extern shared按启动第三参数提供bytes。输出始终16×16，不把halo当作更多输出。
+
+### 10. 加载责任
+
+tid67负责67和323；tid68只负责68，因为324已达到shared_count。L323对应shared_y17、shared_x17，恰为右下角halo；漏掉第二轮会漏这个角。
+
+### 11. 唯一所有者证明
+
+每个L∈[0,324)唯一写成L=t+q×256，t=L%256属于0..255，q=L/256非负。加载循环正好由thread t在第q轮写它。每槽都有一个所有者，边界值也显式写入，因此屏障后不读未初始化槽位。
+
+### 12. 越界输出仍有工作
+
+尾block中thread的输出x可能超W，但其线性加载L可能映射到另一个shared行或halo，仍是合法输入，供其他线程使用。只有在完成所有加载和唯一屏障之后，才按输出有效性return。错误原因首先是丢加载责任，不笼统声称所有return必死锁。
+
+### 13. Compute下标
+
+输入暂存origin=输出块左上−R，shared位置ty+fy/tx+fx恰对应全局输出y+fy−R/x+fx−R。R已包含在origin，若compute再次减R会重复偏移。输出窗口左上是shared(ty,tx)，不是shared(ty−R,tx−R)。
+
+### 14. 屏障数量
+
+加载后屏障保护跨线程read-after-write。计算结束后不再覆盖同一tile，kernel直接结束，所以无需消费后的屏障。若在同一kernel中循环处理多个tile或迭代复用数组，就需在下一次写之前保护仍在读当前tile的消费者。
+
+### 15. Constant访问
+
+所有lane同一步读同一filter系数适合广播。若lane读许多不同地址，constant访问可能序列化，不保证比global cache好。案例只改变filter存储，图像数据和算法保持一致，才能观察该因素。
+
+### 16. 并发filter
+
+同device/context的constant符号不是每stream独立。两个filter任务要顺序化更新与使用，或让每任务传独立global权重。不能只为两个kernel设置不同stream，就认定c_filter各有一份。
+
+### 17. 一维分解
+
+Gaussian为h=v=[1/4,2/4,1/4]，外积生成/16二维系数；Sobel X为h=[−1,0,1]、v=[1,2,1]。对conv方向，一维向量都翻转，外积恰好等于二维旋转。可分离不等于权重全正。
+
+### 18. 展开证明
+
+temp[y,x]=Σfx h[fx]I[y,x+fx−R]；out[y,x]=Σfy v[fy]temp[y+fy−R,x]。代入得ΣfyΣfx v[fy]h[fx]I[...]。须让中间边界与原二维扩展一致，且F为该外积；非线性重归一化边界不能无证明沿用。
+
+### 19. 中间成本
+
+temp多写完整WH个float，垂直又读它；kernel启动从一次变两次，temp float存储增加舍入。box的二维float权重构造与两阶段乘法也可能有舍入差异，采用解释过的容差。减少乘加未必抵消额外流量和启动成本。
+
+### 20. 完整计时
+
+separable的输出任务只有两个kernel都完成才算完成；仅包围垂直会漏水平成本。Event在水平之前record，垂直之后record并等待，分配/上传/验证放外。统计结果不能再与包围完整direct任务的时间不对称比较。
+
+### 21. 请求计数
+
+R1：naive256×9=2304、shared324，比例约7.111；R4：naive256×81=20736、shared576，比例36。是源码图像元素请求模型；cache、边界和同址读取让DRAM transaction不一定按该比例变化。
+
+### 22. 测试矩阵
+
+至少包含1×1、1×17、19×1、16×16、17×15、37×29，分别搭配zero/clamp、gaussian/sobel/asymmetric、corr/conv，box再测R1/2/4。先CPU手算，再GPU全量比较；方向测试用Sobel或asymmetric，尾部测试不能只用整tile。
+
+### 23. 输出长度
+
+有效窗口=(3−1)×2+1=5；输出floor((7+2×2−2×(3−1)−1)/2)+1=floor(6/2)+1=4。stride移动输出中心，dilation移动filter内部采样，不能混为同一参数。
+
+### 24. Reflect-101设计
+
+长度N>1取周期P=2(N−1)，将i归一到m=((i%P)+P)%P，映射m<N?m:P−m。N=1直接映射0，避免周期零。二维分别映射x/y；CPU先打印负坐标、端点外一格和多周期索引，再GPU按同规则取样，测试1×1和非方阵。此定义不重复边缘端点，与另一种reflect约定不同。
+
+## 第 18 章
+
+### 1. 两种任务
+
+设备任务定义输入已在显存，计时覆盖完整卷积计算，D2H与验证在外；端到端任务可定义CPU输入可用起到CPU输出就绪止，包括上传、计算、回传。若还包括文件I/O，必须另写起止。保持同filter、边界和输出正确性，不混用计时分母。
+
+### 2. 工具选择
+
+CPU提交空隙、API阻塞、传输和kernel交叠用Systems时间线；shared bank、事务效率和指令资源用Compute。两个工具互补，不能用单kernel资源表证明整个应用没有传输瓶颈。
+
+### 3. 两条轨道
+
+launch API duration在CPU轨道，描述提交调用所用时间；kernel duration在GPU轨道，描述执行区间。异步使二者时间与位置不同；API若包含等待，可能等的是前序工作，不一定是该行新launch的计算。
+
+### 4. 重复任务的数学语义
+
+每次kernel读不可变input，写output=2*input+1。output不回流为input，因此32次输出仍是同一个结果；变化的是提交/等待路径。若改成output*=2，就变成不同任务，不能沿用对照。
+
+### 5. NVTX范围
+
+push/pop描述当前host线程的范围，pop不会等待GPU。只包launch时，GPU可能在pop后才完成。需要表达完成的host阶段，就在pop前放适当完成点，并仍在GPU轨道检查具体执行。
+
+### 6. 命令拆解
+
+`nsys profile`选择采集；trace/sample/-o是工具选项；可执行文件之后的1031、32、queued属于应用参数。报告前缀不是应用输出文件名。核对工具日志的产物与应用PASS/返回码，不把report生成成功当作数值验证成功。
+
+### 7. 捕获范围
+
+全程序适合首次了解初始化/预热/复制/主体；cudaProfilerApi聚焦已定义主体，减少数据量。检查capture-range-end结束行为，确保程序仍运行至结果校验；捕获API不改变算法完成规则。
+
+### 8. 无GUI流程
+
+记录版本和构建，CLI生成report，nsys stats查看默认表，help-reports查询报告名，再检查kernel/API/memcpy统计；ncu CLI查询sections/metrics并采目标。保存report与文本，必要时下载到兼容GUI查看关联。无需服务器桌面或把账号密码写入资料。
+
+### 9. 重叠算术
+
+duration和4+4=8，区间并集[0,6]长度6。将8除6得到133.3%只是不同分母的累计执行量，不是物理GPU利用率超100%。跨stream汇总时尤其要保留这个区别。
+
+### 10. Amdahl计算
+
+原剩余60ms不变，目标40ms变20ms，新总80ms，加速100/80=1.25。公式f=.4、s=2，分母.6+.2=.8。时间前提是可按该贡献分解；重叠关键路径要另分析。
+
+### 11. 上限
+
+f=.05、s趋于无限，新时间比例.95，上限1/.95≈1.05263。目标部分再快，其他95%仍在关键路径；并非GPU浮点能力不足。
+
+### 12. 重叠的关键路径
+
+两个同时执行4ms的kernel并不贡献8ms串行延迟。加速其中一个，另一个可能仍决定完成时刻。用dependency timeline找能缩短终点的工作，再定义f；不能从总duration占比直接得到可优化wall time比例。
+
+### 13. 预热筛选
+
+先确认实际名称、shape和调用次数；匹配affine_kernel的前三次是warm-up，用launch-skip3并核对日志/LaunchStats。若还有其他同名调用，加入kernel-id或捕获范围，不按猜测的“第四条必然主体”操作。
+
+### 14. 本机能力
+
+section/metric随版本与架构变化；查询能防止脚本依赖不存在字段。记录字段单位、平均/总量和内存层级，才能跨实验解释。拿另一张GPU的名字套到本机报错不说明kernel错误。
+
+### 15. 采集与排名
+
+ncu可能重放、控制cache并插桩，时间与普通运行不同。普通Event/host多轮样本用于排名，工具报告用于验证机制；采集期间PASS证明的是执行结果，不把插桩后的耗时称作生产延迟。
+
+### 16. 转置假设
+
+固定一个warp的lane对应相邻输入列，naive store地址间隔height个元素；shared版重排后store连续。观察global store requests/sectors与相关效率，结合DRAM/L2流量和duration。仅“tiled更快”不足以证明具体事务机制。
+
+### 17. 带宽利用率
+
+减少冗余流量可让DRAM利用率下降，同时完成更快，二者不矛盾。应比较相同任务时间、有用bytes和实际traffic；利用率是解释变量，不是越高越好的分数。
+
+### 18. Stall
+
+一个warp等待时另一个可能持续发射。采样stall百分比要按工具定义解释，不能直接变成SM空闲时间。结合eligible、issue、吞吐和资源，判断是否有可隐藏的等待。
+
+### 19. 构建选项
+
+lineinfo帮助优化构建的指令/源码关联；-G服务设备调试，可能生成不同代码、资源和性能。比较Release基线时保持目标架构和优化设置，不把debug版本与Release排名。
+
+### 20. 局部快、应用慢
+
+可能多了传输或分配、增加CPU提交/同步、改变batch或任务语义、GPU与CPU重叠减少、功耗/并发背景变化。先检查相同输入与完整完成点，再回到Systems关键路径，不只引用一个kernel新时间。
+
+### 21. 单因素实验
+
+固定图像/filter/边界/精度、编译选项与GPU，只改变shared tile候选；每版通过尾部/oracle/Sanitizer，多轮普通计时，再采相同kernel对应的访存/资源。若同时换filter或separable算法，就应另立实验。
+
+### 22. 证据包
+
+report+GPU/CC/driver/Toolkit/nsys/ncu版本、源码commit、完整构建/运行命令、shape/精度、预热与计时范围、原始样本与统计、校验输出和假设。GUI截图可以补充，但不能替代可复现命令与report。
+
+### 23. 没有GPU时
+
+能完成时间算术、区间并集、命令拆解、源码职责与实验计划；C++编译需要编译器。CUDA运行、Event样本、trace、硬件metrics和实际排名必须标NOT RUN，不能用理论图替换。
+
+### 24. 两份报告的交付
+
+使用同input/repeats构建sync/queued，分别采report并保留普通运行时间。指出两模式host等待点、GPU空隙与最终完成点；不预设queued一定更快。无法采集时写明确命令、预期观察轨道和待核验项，报告/时间字段保持未运行。
+
+## 第 19 章
+
+### 1. 四种状态
+
+pending block尚未获得SM资源；resident warp已占有执行所需预算；eligible warp当前有可发射指令；issued是调度器实际发射动作。驻留不意味着每warp每周期都运行，更不意味着固定绑到一个CUDA core。
+
+### 2. 比例
+
+24/64=37.5%。分子分母单位都是warp，且来自同一SM与同一架构定义。换GPU后分母要查询，不硬编码为64。
+
+### 3. 默认预算
+
+线程上限8、寄存器上限4、shared上限3、block槽位32，取min得3blocks；每block8warp，共24warp。是假想忽略粒度模型，不是当前GPU实测。
+
+### 4. 单降shared
+
+S16384使shared上限6，但寄存器仍上限4，最终4blocks/32warps/50%。优化一个非最终瓶颈可能收益有限，资源限制还会换成另一个因素。
+
+### 5. 再降寄存器
+
+r32时寄存器上限8，shared仍6，所以6blocks/48warps/75%。实际减少寄存器是否增加spill是另一个问题，纸面驻留提高不保证速度。
+
+### 6. 部分warp
+
+ceil(33/32)=2，最后warp只有一个实际线程。模型限制整warp便于预算第一步；真实任意B需要ceil、分配粒度和collective参与契约。不能用33/32的浮点值当warp数量。
+
+### 7. Grid不足
+
+API不会创造block，grid10仍只有10个任务，最多同时使用一部分SM。要区别单SM容量与应用供给；小grid时achieved平均可能远低于资源预测。
+
+### 8. Shared总量
+
+每block静态shared加启动第三参数的dynamic bytes；API动态参数也传bytes。元素数必须乘sizeof(T)，且实际有对齐/硬件粒度。动态为0不会抵消静态需求。
+
+### 9. 函数属性
+
+numRegs是编译后每thread寄存器需求，不是C++变量数；localSizeBytes是每thread local使用提示，不全是spill，也不直接给运行traffic。编译器报告、机器码和profiler共同解释。
+
+### 10. 两个API
+
+ActiveBlocks API评估你指定函数/B/dynamic配置的驻留；PotentialBlockSize提供资源意义建议和最小grid等起点。后者不等于对真实输入测速后的冠军，仍需计时与验证。
+
+### 11. 单位错误
+
+把16384个float当16384bytes传入，会只估计所需65536bytes的四分之一；预测驻留过高，启动和查询配置又不一致。把单位写在变量名和输出中，查询与launch使用同值。
+
+### 12. Grid-stride证明
+
+i先写成group*Items+j，group=i/Items、j=i%Items；group再对grid*block取余找到线程，对同数取商找到轮次。每i唯一归属，尾组只访问base+j<n。读写独立数组避免跨组覆盖输入。
+
+### 13. n1031尾组
+
+按Items4划分，最后base1028，j0/1/2对应1028/1029/1030有效，j3的1031越界不读不写。grid-stride负责该组的实际线程取决于总线程数，但合法项定义不变。
+
+### 14. 动态shared探针
+
+0与非零候选还改变初始化屏障和shared读路径，所以差异不是纯驻留；16与32KiB同分支更接近，但程序grid还按预测容量变化。想隔离驻留，固定相同指令路径和grid，记录所有影响因素。
+
+### 15. Items4地址
+
+每thread连续4项，固定j的邻lane地址相差4float；标量指令的事务效率可能变化。ILP、工作量和寄存器也变，因此一次候选快慢不能唯一归因ILP。另设计相同地址布局对照。
+
+### 16. 理论与实际
+
+理论是函数/配置的资源允许上限；实际平均受grid、尾波、负载不均、运行阶段和工具定义影响。先核对采到同一B/shared/shape，再比较，不把API结果叫achieved。
+
+### 17. r64约束
+
+原kernel若已使用少于64reg，限制可能不改变它；ABI/launch bounds等也影响预算。核对编译器与FuncAttributes，不能只看到命令中出现r64就假定生效。
+
+### 18. 占用提高但更慢
+
+压寄存器→更多spill/local读写→更慢；减shared→global冗余load→更慢；缩block→更多同步/调度成本→更慢。这些情况下驻留数字提高，但有用任务成本也增加。
+
+### 19. Launch bounds
+
+256是该kernel允许的最大threads/block承诺；2是编译器寄存器权衡中的最小blocks/SM目标，不是所有shared/硬件条件下的Runtime保证。它不自动改grid，也不决定实际并发。
+
+### 20. 超过承诺
+
+512threads超过max256会导致启动失败，应通过launch检查捕捉。host候选和函数maxThreadsPerBlock必须一致，不能把属性仅当注释。
+
+### 21. 隐藏与减少
+
+latency hiding在一个warp等待时执行其他工作，没有降低那次load的返回延迟。减少不必要load、优化cache/合并、打断依赖链会改变工作与等待；更多warp只增加可选候选。
+
+### 22. ILP实验
+
+保持lane访问集合与输入规模，使用多个独立accumulator，保存编译后regs、指令、spill/local、eligible/issue和时间。输出oracle相同；若为了增加ILP多做了无用计算，不能仅凭吞吐升高宣布任务加速。
+
+### 23. 证据表
+
+每行B/Items/dynamic/static/regs/local/预测blocks/warp占用/grid/shape，加完整构建/版本、多轮time与校验。profiler实际驻留另列并标采集范围。选择同配置同目标，不能混debug与Release。
+
+### 24. 扫描结果解释
+
+先排除不支持与未验证候选，按普通中位时间排序，再挑一组资源预测与快慢不一致者，用访存/依赖/供给/指令证据解释。没有设备不填排名，提交候选表、命令和所需证据清单。
+
+## 第 20 章
+
+### 1. 层级
+
+stream是host提交队列；grid/block/warp/thread描述kernel内部执行组织。一个stream可以提交很多grid，多个stream不会固定分配多个SM。名字也没有硬件专用含义。
+
+### 2. 同队列顺序
+
+H2D→kernel→D2H在同stream中依赖有序，后一步不会提前使用未完成前序数据。host可连续提交，再等D2H后的完成点读结果；逐操作host等待会增加同步而没有增加必要依赖。
+
+### 3. 跨队列
+
+host先调用producer再调用consumer，不保证不同stream的完整GPU操作先后。consumer需要明确wait生产者event；无共享数据的独立任务可以任意合法顺序或交叠执行。
+
+### 4. 借用地址
+
+H2D借host输入/device目标；kernel借device输入输出；D2H借device源/host目标。完成前不改、不释放被借用区域，输出写完前不读。vector重分配或函数局部数组失效也属于破坏生命周期。
+
+### 5. Pinned含义
+
+pinned是稳定host页，不自动成为device数组。锁页容量过大会影响系统；slot有限池控制占用。Async+Pinned仍需硬件、依赖与资源条件，不承诺一定重叠。
+
+### 6. Query结果
+
+success说明对应已记录点完成；not-ready说明目前未完成，都是合法。即时query不是延迟保证，不能写断言“一定not-ready”。完成前继续处理独立工作或等待，不读取尚未就绪输出。
+
+### 7. 错误路径
+
+除了not-ready，其余错误可能来自API或前序异步工作，必须检查并报告。把所有非success都无限重试，会掩盖真实错误，形成永远轮询。
+
+### 8. 同步粒度
+
+device等当前device前序工作，stream等一队列，event等一个记录点。按数据真正需要的范围选择；每chunk device同步会连带阻止其他slot工作。
+
+### 9. Event范围
+
+record只包括它在队列中之前的任务，不包含未来提交。再次record代表新状态；重用时要知道wait针对哪个记录。本章旧任务完成并消费后才重录。
+
+### 10. 未记录事件
+
+未record事件没有对应的未来GPU工作，wait不能作为“迟早producer会做完”的承诺。先提交producer并record，再给consumer建立等待边。event对象存在不等于数据ready。
+
+### 11. 双前置条件
+
+merge同时读取a/b，因此必须等ready_a和ready_b；一条wait只保护一份输入。即使一次运行另一个producer碰巧先完成，也没有程序保证，不能删边。
+
+### 12. Wait位置
+
+wait只约束其后提交的consumer操作。写在merge之后，merge已被允许使用未就绪数据，不能事后补救。顺序应为两wait→merge→done。
+
+### 13. 分块区间
+
+[0,8) count8、[8,16) count8、[16,23) count7。最后bytes=7*sizeof(float)，offset+count=23刚好覆盖末尾。区间不重叠，无缺口。
+
+### 14. Slot映射
+
+id%2得0、1、0。slot0复用前必须取走chunk0，再承接chunk2；chunk2结果仍写完整output的offset16，而不是按slot0写回起点0。
+
+### 15. Host复用
+
+device队列顺序不阻止CPU在H2D完成前改host_input，也不自动把旧host_output复制进最终数组。done保护借用完成，consume保护旧结果不丢；两者缺一不可。
+
+### 16. Done位置
+
+记录在D2H之后，才说明H2D/kernel/D2H整个槽任务完成。如果仅在H2D后record，CPU可能提前读取未写host_output或重用device地址。不同复用资源可有更细event，但本章采用完整slot完成点。
+
+### 17. 两个状态
+
+busy表示有当前待完成/消费块，consume后清false；used表示本轮至少提交过任务，为最终join保留最新done边。drain将busy清掉并不意味着没有设备工作需要计入跨度，因此不能拿busy替代used。
+
+### 18. Fork/join
+
+所有worker先等同start，control等所有used slot最新done才record stop。仅取一个worker可能漏另一个更晚D2H。GPU span包含调度/host供给空隙，不是多个kernel duration之和。
+
+### 19. Host范围
+
+从提交fork前到最后gather与stop完成，包括填host槽、submit、reuse等待、收结果。排除Pool分配、原input生成、完整output清空和最终逐项校验。它是处理核心端到端，不含磁盘读写。
+
+### 20. 容量
+
+两池共S+1=4slot，每slot3缓冲×262144×4=3145728bytes，总12582912bytes=12MiB。host两缓冲共8MiB，device共4MiB；完整CPU input/output另算，不能漏掉后宣称整个进程只用12MiB。
+
+### 21. 理想时间
+
+串行4×(2+3+2)=28ms；独立三阶段理想首次7ms、后3块每3ms，共16ms。是资源充分、无额外开销的模型；共享copy engine或CPU供给不足时不能沿用。
+
+### 22. 实验网格
+
+记录S/chunk/n/块数/尾count/槽容量、pinned或pageable、GPU能力提示、完整构建、host和GPUspan多轮统计、验证与时间线交叠证据。先固定memory比较S/chunk，再比较memory，减少混杂。
+
+### 23. 无重叠排查
+
+先确认实际pinned和不同slot独立地址，再查是否每块device同步/默认stream隐式同步、chunk数量与长度；随后查copy engine/kernel驻留、总线和CPU供给。多个stream名字出现只是队列存在，不是执行交叠证据。
+
+### 24. 两输入向量加法
+
+每slot增加host_a/host_b与device_a/device_b，另有host_output/device_output（或在确认逐元素安全后选择设备原地输出）。两次H2D同stream排在add之前，D2H之后record done。CPU复用前等done并消费旧结果；global count/offset和尾bytes保持正确。
+
+CPU oracle按相同输入生成a+b，结果有限且逐项检查，并验证两个host源不变。串行基线使用同chunk、同memory和同数学任务，完整计时包含两H2D/add/D2H与staging/gather；逻辑传输改为3*n*sizeof(float)。最后用Systems确认跨slot交叠，而非只看speedup。
