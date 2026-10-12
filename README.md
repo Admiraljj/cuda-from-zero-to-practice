@@ -4,7 +4,7 @@
 
 学习顺序是：先理解问题与数据，再手算线程分工，阅读完整程序，逐行理解新增语法，运行并验证结果，最后独立修改和练习。这不是速查表，也不是 NVIDIA 官方指南的逐页译本。
 
-> 当前发布第 1—15 章的教材化修订版，不是已经写完的全书。后续内容将逐章完善。
+> 当前发布第 1—16 章的教材化修订版，后续内容将逐章完善。
 >
 > 文中的示例输出为预期结果；案例尚未完成实机验证，请在自己的开发环境中编译运行并核对。
 
@@ -25,8 +25,11 @@
 13. [原子操作与直方图](13-原子操作与直方图.md)
 14. [Scan（前缀和）与流压缩](14-Scan前缀和与流压缩.md)
 15. [矩阵转置与合并访存](15-矩阵转置与合并访存.md)
+16. [矩阵乘法：从一个点积到 Tiled GEMM](16-矩阵乘法-朴素到Tiled-GEMM.md)
 
-配套：[练习答案（第 1—15 章）](附录-C-练习答案.md)
+配套：[练习答案（第 1—16 章）](附录-C-练习答案.md)
+
+第 16 章包含 23 节、6 个完整程序、2 张本地暗色图和 24 道练习：从 shape/点积/线性下标，逐步写 naive、shared tiled GEMM，再推导 cuBLAS 布局、精度与统一 benchmark。命令入口见[第 16 章案例目录](code/16_matmul/README.md)。
 
 第 1 章只需要 C++17 编译器，不需要 GPU。第 2 章起以 Linux、NVIDIA GPU、CUDA Toolkit 为主线；环境检查和命令解释放在正文中。请按顺序阅读，不必预先掌握指针、warp、SIMT 或编译选项。
 
@@ -48,6 +51,7 @@
 - [NVCC 编译器文档](https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html)：编译、链接和命令选项。
 - [CUDA Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html)：正确性、访存与性能分析。
 - [Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html) 与 [CUDA-GDB](https://docs.nvidia.com/cuda/cuda-gdb/index.html)：错误诊断和调试。
+- [cuBLAS](https://docs.nvidia.com/cuda/cublas/index.html)：矩阵计算、布局与精度接口。
 
 ## 下载与阅读
 
@@ -88,6 +92,6 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 后续章节
 
-计划继续覆盖矩阵乘法、卷积、性能分析、资源与 occupancy 的进阶实践、stream/event、CUDA Graphs、常用库、多文件工程、多 GPU、Softmax 与毕业项目。
+计划继续覆盖卷积、性能分析、资源与 occupancy 的进阶实践、stream/event、CUDA Graphs、常用库、多文件工程、多 GPU、Softmax 与毕业项目。
 
-这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前阅读到第 15 章即可暂停并完成实验，不需要寻找尚未发布的正文。
+这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前阅读到第 16 章后，可以按本章验收顺序完成点积、边界、数值和性能实验。

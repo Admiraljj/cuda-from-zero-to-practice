@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#b7c6d5"/></marker>
+    <style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:22px}.small{font-size:19px}.title{font-size:30px;font-weight:bold}.box{fill:#252526;stroke:#657787;stroke-width:2}.line{fill:none;stroke:#b7c6d5;stroke-width:3;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1200" height="820" fill="#1e1e1e"/>
+  <text x="38" y="50" class="title">一个 block 的 GEMM：两个加载责任，一份私有累加</text>
+  <text x="38" y="86" class="small">示意 TILE=4，K=10；实际程序 TILE=16。每个 phase 沿 K 前进，C tile 保持不变。</text>
+  <rect x="40" y="125" width="530" height="150" rx="12" class="box"/>
+  <rect x="630" y="125" width="530" height="150" rx="12" class="box"/>
+  <text x="65" y="163">A：输出行固定，加载列随 phase 改变</text>
+  <text x="65" y="204">A[row, phase×4 + tx]</text>
+  <text x="65" y="243" class="small">条件：row&lt;M 且 a_col&lt;K；否则写 0</text>
+  <text x="655" y="163">B：输出列固定，加载行随 phase 改变</text>
+  <text x="655" y="204">B[phase×4 + ty, col]</text>
+  <text x="655" y="243" class="small">条件：b_row&lt;K 且 col&lt;N；否则写 0</text>
+  <path d="M305 278 V320" class="line"/><path d="M895 278 V320" class="line"/>
+  <rect x="40" y="330" width="530" height="100" rx="12" class="box"/>
+  <rect x="630" y="330" width="530" height="100" rx="12" class="box"/>
+  <text x="65" y="370">a_tile[ty][tx] ← 每线程写一个槽位</text>
+  <text x="65" y="408" class="small">一个 A 元素供同一输出行的 4 个线程复用</text>
+  <text x="655" y="370">b_tile[ty][tx] ← 每线程写一个槽位</text>
+  <text x="655" y="408" class="small">一个 B 元素供同一输出列的 4 个线程复用</text>
+  <path d="M305 433 V458 H590 V480" class="line"/><path d="M895 433 V458 H610 V480" class="line"/>
+  <rect x="40" y="490" width="1120" height="145" rx="12" class="box"/>
+  <text x="65" y="530">屏障①：当前 phase 的所有 shared 槽位准备好</text>
+  <text x="65" y="570">每线程：acc += a_tile[ty][inner] × b_tile[inner][tx]，inner=0..3</text>
+  <text x="65" y="610">屏障②：所有消费者结束，才可覆盖下一 phase 的槽位</text>
+  <text x="50" y="680" class="small">phase 0：K 的 0..3 → phase 1：4..7 → phase 2：8..9 + 两个补零位置</text>
+  <text x="50" y="717" class="small">acc 属于每个线程，跨 phase 保留；shared 属于每个 block，跨 phase 复用。</text>
+  <rect x="40" y="745" width="1120" height="50" rx="10" fill="#303b44"/>
+  <text x="60" y="778">全部 phase 后：只有 row&lt;M 且 col&lt;N 的线程写 C；其他线程仍完成协作。</text>
+</svg>

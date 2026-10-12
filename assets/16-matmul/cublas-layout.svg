@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="610" viewBox="0 0 1200 610">
+  <defs><style>text{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;fill:#d4d4d4;font-size:23px}.small{font-size:19px}.title{font-size:30px;font-weight:bold}.box{fill:#252526;stroke:#657787;stroke-width:2}</style></defs>
+  <rect width="1200" height="610" fill="#1e1e1e"/>
+  <text x="35" y="50" class="title">同一数组，两种布局解释：C = AB → Cᵀ = BᵀAᵀ</text>
+  <text x="35" y="91" class="small">不用转置 kernel，不移动数组。交换库的输入顺序，并重新描述 shape 与 leading dimension。</text>
+  <rect x="35" y="125" width="350" height="165" rx="12" class="box"/>
+  <rect x="425" y="125" width="350" height="165" rx="12" class="box"/>
+  <rect x="815" y="125" width="350" height="165" rx="12" class="box"/>
+  <text x="60" y="165">row-major A：M×K</text><text x="60" y="210">[1 2 3]</text><text x="60" y="249">[4 5 6]</text>
+  <text x="450" y="165">row-major B：K×N</text><text x="450" y="207">[ 7  8]</text><text x="450" y="239">[ 9 10]</text><text x="450" y="271">[11 12]</text>
+  <text x="840" y="165">row-major C：M×N</text><text x="840" y="211">[ 58  64]</text><text x="840" y="252">[139 154]</text>
+  <text x="63" y="326" class="small">相同 A 数组 [1 2 3 4 5 6]</text><text x="453" y="326" class="small">相同 B 数组 [7 8 9 10 11 12]</text>
+  <rect x="35" y="355" width="350" height="145" rx="12" class="box"/>
+  <rect x="425" y="355" width="350" height="145" rx="12" class="box"/>
+  <rect x="815" y="355" width="350" height="145" rx="12" class="box"/>
+  <text x="60" y="395">column-major Aᵀ：K×M</text><text x="60" y="436">ld=K，作为第二输入</text><text x="60" y="476" class="small">offset = row×K + inner</text>
+  <text x="450" y="395">column-major Bᵀ：N×K</text><text x="450" y="436">ld=N，作为第一输入</text><text x="450" y="476" class="small">offset = inner×N + col</text>
+  <text x="840" y="395">column-major Cᵀ：N×M</text><text x="840" y="436">ld=N，输出仍用 C 数组</text><text x="840" y="476" class="small">offset = row×N + col</text>
+  <rect x="35" y="530" width="1130" height="55" rx="10" fill="#303b44"/>
+  <text x="58" y="566">cuBLAS：m=N，n=M，k=K；输入 B、A；ld 为 N、K、N；均选 OP_N。</text>
+</svg>

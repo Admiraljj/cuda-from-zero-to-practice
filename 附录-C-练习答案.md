@@ -1916,80 +1916,132 @@ output_index = col * output_ld + row
 
 ## 第 16 章
 
-1. 逐输出做长度 3 的行列点积，输出尺寸 2×2。
-2. TILE 32 为 1024 threads/block，shared 与寄存器压力更大，不保证最快；用资源报告和 Events。
-3. `-Xptxas=-v` 输出每 kernel registers、shared 等，分别记录 naive/tiled。
-4. kernel 最终写 `c=alpha*sum+beta*c`，因此必须初始化/传入原 C。
-5. cuBLAS 通常远快于教学 kernel，因多级 tiling、Tensor Core、流水线和架构专门调优。
+### 1. Shape 契约
 
-## 第 17 章
+输出为 3×2，共 6 个元素，每个元素是 5 项点积。B 改为 2×5 后，A 的列数 5 与 B 的行数 2 不同，不能直接计算 AB。若题意允许 B 的转置，可另定义 A×B^T；不能只交换数字后假定仍是原问题。
 
-1. Sobel X filter 可含负系数，输出应使用 float/signed 类型，不能直接压到 unsigned byte。
-2. shared tile `18×18`；256 threads 用 linear loop 加载 324 值，zero padding，barrier 后每线程读 3×3。
-3. clamp：`ix=min(max(ix,0),width-1)`，角落会重复边缘像素而不是补 0。
-4. box blur 可先水平再垂直；比较约 `2K` 运算与 `K²`，同时计入中间读写。
-5. 使用固定随机种子和非方形小尺寸；CPU double 参考逐元素比较。
+### 2. 一个输出的完整点积
 
-## 第 18 章
+`C[0,1]=1×8+2×10+3×12=64`。A flat 下标依次为 0、1、2；B flat 下标依次为 1、3、5；C 下标为 1。求和过程中 row=0、col=1 固定，变化的是 inner。
 
-1. `nsys profile -o transpose ./transpose`，GUI/summary 中找 kernel timeline。
-2. `ncu --set full --kernel-name regex:transpose_tiled ./transpose`，查看 Memory Workload/Shared sections。
-3. 用 NVTX push/pop 包围 initialization、H2D、kernel loop、D2H，并按安装方式链接 NVTX。
-4. 每次同步会让 CPU/GPU 串行并产生时间线空洞；末尾同步允许连续提交。
+### 3. 输出线程数量
 
-## 第 19 章
+M/N 决定输出平面，共 37×23=851 个合法输出；K 决定每个输出做多少项点积，不增加输出数量。grid=(ceil(23/16),ceil(37/16))=(2,3)，共 6 个 block、1536 个已启动线程。其余 685 个线程没有合法 C；tiled 版仍让它们完成加载或补零及阶段同步。
 
-1. 使用同一 Release flags，保存 ptxas 输出；不同 kernel 函数会分别报告。
-2. shared/block 翻倍时，shared 限制下可驻留 blocks 最多约减半，实际还受分配粒度和其他限制。
-3. 比较时间和结果；occupancy 只是解释变量，不是排名目标。
-4. 降 register cap 后检查 ptxas 的 spill stores/loads 与 local memory traffic；变慢就撤销。
+### 4. 下标和字节
 
-## 第 20 章
+float 按 4 bytes 计算：A[2,4] index=2×5+4=14，byte offset=56；B[4,1] index=4×2+1=9，offset=36；C[2,1] index=2×2+1=5，offset=20。这些 offset 是从各自数组首地址算起，不能拿 A 的 offset 去访问 B。
 
-1. Systems 时间线中 H2D、kernel、D2H 是否在不同 engines 上重叠才是证据。
-2. pageable memory 可能出现 staging/同步，重叠减少；API 正确返回不代表并发。
-3. 形成二维实验表（streams×chunk），每项多次测量；更多 streams 不一定更快。
-4. 分别在前两 streams record events，让第三 stream wait 两个 events 后启动 merge。
+### 5. 每线程私有 accumulator
 
-## 第 21 章
+普通 kernel 局部变量属于每个线程的执行实例。每个线程从 0 开始沿 K 累加自己的 `(row,col)`；源码写一次，执行时有许多份私有状态。最终每个合法 C 地址又有唯一所有者，所以不需要 atomic。若改为多个线程共同贡献一个 C，就要设计独立 partial 或其他合法合并协议。
 
-1. 在 non-blocking stream begin capture，提交三 kernels，end、instantiate、循环 graph launch，末尾 stream synchronize。
-2. Systems 应显示 graph launch API 更少/更低 CPU 提交成本；GPU kernel 本身未必改变。
-3. 捕获失败后检查 `cudaStreamEndCapture`/相关返回码，销毁无效 graph，必要时重建 stream。
-4. 拓扑相同可用 whole graph update 或单 node parameter update；检查 update result，不成功则重新 instantiate。
+### 6. 一个 phase 的复用数
 
-## 第 22 章
+T=4：输出 16 个，每个输出 4 项，所以 64 个乘加项；naive A/B 输入请求为 128 个元素；tiled 协作加载为 16+16=32 个元素；每个输入 tile 元素复用 4 次，源码 global 元素请求理想缩减因子为 4。这不是 DRAM transaction 必然缩减 4 倍的保证。
 
-1. 使用 zip/counting iterator 或自定义 functor：`y=alpha*x+y`，指定 device execution policy/iterators。
-2. 按临时存储查询—分配—执行—复制结果—释放流程。
-3. 确保同尺寸、同数据类型、同 math mode、warm-up 与计时范围；cuBLAS handle 在计时外创建。
-4. 至少使用 `M!=N!=K`，CPU 验证能暴露 leading dimension/交换错误。
-5. 由 device properties/官方表确认；设置 cuBLAS math/compute type，并报告相对误差。
+### 7. K phases
 
-## 第 23 章
+K=29、T=16：两个 phase。第一个 inner=0..15，共 16 项；第二个 inner=16..28，共 13 项，局部 inner=13..15 的三个位置补零。每个 A 行和 B 列按这个 K 边界处理，不能只给 A 补零而继续越界读 B。
 
-1. 根 CMake 已列出全部正确性示例：配置架构、build、ctest。故障示例故意不加入测试。
-2. `.h` 声明 host wrapper；`.cu` 内定义 kernel 和 launch；`main.cpp` 只调用 wrapper。
-3. 根 CMake 已注册 transpose/matmul；CTest 非零退出即失败。
-4. 参考根 CMake 的 `BUILD_CUBLAS_EXAMPLE`、`find_package(CUDAToolkit)` 和 `CUDA::cublas`。
+### 8. 输出列越界但 A 加载仍有用
 
-## 第 24 章
+右下 block=(1,1)，ty=0/tx=5：row=16、col=21，所以不写 C。phase0 的 a_col=5，有效，加载 A[16,5]；b_row=0，但 col=21≥18，B 槽位补零。phase1 a_col=21≥19，A 补零；b_row=16 有效但 col 仍越界，B 也补零。该线程仍参加两轮的两道屏障。
 
-1. `cudaGetDeviceCount`；count<2 打印 SKIP；否则分 halves，分别 set device、allocate/copy/launch/copy back/sync/free。
-2. `efficiency=(T1/T2)/2`。小数据、传输共享和负载不均会降低。
-3. `nvidia-smi topo -m` 中 PIX/PXB/PHB/SYS/NV# 等表示不同路径，确切含义看该版本帮助。
-4. 双向分别调用 `cudaDeviceCanAccessPeer`；peer 能力可能非对称，传输也需两方向测。
-5. 按 A 的 rows 分片时，每张 GPU 需要对应 A slice 和完整 B，输出 C 按 rows 拼接；B 复制可能成为开销。
+### 9. 输出行越界但 B 加载仍有用
 
-## 第 25 章
+ty=5/tx=0：row=21、col=16，不写 C。A 两轮都因 row 越界补零；phase0 的 b_row=5，加载 B[5,16]；phase1 的 b_row=21≥19，B 补零。若用 `valid_c` 同时限制 A/B，就会错误地禁止 phase0 这个有效 B 加载，影响本 block 中合法输出行的消费者。
 
-1. 减 max 不改变 softmax 比值，却把最大指数变成 1，避免正溢出并改善尺度。
-2. 一行内部需要两次 reduction，block 提供 shared/barrier；短行可用 warp，超长行可能需多 blocks。
-3. max 单位元是负无穷，sum 单位元是 0。
-4. 加载 local max 后、每层 reduction、切换 max→sum、每层 sum reduction 都需正确 barrier。
-5. 边界由 `col<cols` 循环保证；每行独占输出；memcheck/synccheck 和 CPU oracle 验证。
-6. 先 Systems 判断 launch/transfer，再 Compute 看 exp throughput、memory、barrier、occupancy，按 cols 分组分析。
+### 10. 退出与加载责任
 
-## 第 26 章
+M=1/K=16/N=1 时，只有 ty=tx=0 有合法输出。该线程只能加载 A[0,0] 与 B[0,0]；A[0,1..15] 与 B[1..15,0] 的加载责任被提前退出的线程丢掉。继续计算的线程会读取未初始化 shared。
 
-毕业项目没有唯一代码答案。合格交付必须包含 specification、CPU reference、边界测试、sanitizer、可复现 benchmark、profiler 证据和 README。若只能运行但无法解释 mapping、同步与瓶颈，说明项目尚未完成。
+当前 CUDA 同步规则排除已退出线程；不能笼统推断这段代码一定在 barrier 死锁。错误已有具体的数据流证据。另需防止仍在运行的线程非一致地跳过对应屏障。本章让所有线程保持阶段结构，因而两类责任都容易证明。
+
+### 11. 第二道 barrier 的交错
+
+```text
+慢 warp：仍读取 phase0 的 bt[inner][tx]
+快 warp：已经完成自己的 phase0 累加
+快 warp：开始 phase1，把同一 bt 槽位覆盖
+慢 warp：下一条 load 取得 phase1 值，却当作 phase0 使用
+```
+
+第一道屏障只保护 phase0 加载已完成，不限制计算之后的下一次覆盖。消费后屏障保证最后一个读者离开，才让任何线程复用槽位。
+
+### 12. 省略补零的残留
+
+K=29 时第二个 phase 的局部 inner=13..15 没有有效输入。若保留原槽位，可能仍存着 phase0 的 inner=13..15；compute 循环照样做 16 次，会把那三项旧乘积再次加入。显式零填充给无效位置定义单位元，同时避免越界 global 读取。
+
+### 13. cuBLAS 参数
+
+逻辑 M=3/K=5/N=2：cuBLAS 输出 C^T 为 2×3，所以 m=2、n=3、k=5；第一输入 d_b，shape=2×5、ld=2；第二输入 d_a，shape=5×3、ld=5；输出 d_c，ld=2。操作均为 OP_N，因为数组已按转置矩阵的列主序解释。
+
+### 14. 有 padding 的 A
+
+A^T shape=5×3，column-major ld=8。A[2,4] 的 flat index=2×8+4=20；紧凑公式给的 14 已不适用。分配元素数至少要覆盖最后合法地址；常见完整行分配为 M×ld=24 项，padding 不进入 K 求和。
+
+### 15. alpha/beta
+
+输出为 `[119 134;287 320]`。beta=0 的语义是 C_old 不参与结果；实现应避开读取未初始化 C_old。手写代码不能直接对 NaN 做 `0*old` 再期待得到零：IEEE 浮点中 0×NaN 仍是 NaN。用 beta==0 分支避免旧值读取。
+
+### 16. 重复覆盖与累加
+
+从零 C 开始、alpha=1/beta=1，两次调用得到 2AB。若每个样本要求相同 C_old，就应每次恢复快照，再调用 GEMM；恢复在计时内则测恢复+GEMM，在区间外则只测 GEMM，都要说明。固定 beta=0 的本章基线无需恢复有数值意义的旧 C。
+
+### 17. exact 证明的适用范围
+
+A/B 为小整数/16，乘积为整数/256，最大绝对部分和分子小于 2^24，均在 float 精确表示范围。改为 0.1F/0.2F 后输入不再是这套小分母精确分数；乘法与累加可能舍入，不同顺序不保证相同。证明的前提必须随测试输入一起保存。
+
+本程序检查的是 `==` 数值相等；+0 与 -0 会比较相等，不是逐字节 bitwise 比较。如果接口要求位模式一致，应另立规则并检查字节，而非把本例的 PASS 解释为所有 bits 一致。
+
+### 18. 双精度参考
+
+`double(a)*double(b)` 先提升两个已存储的 float，产品按 double 运算。`double product=a*b` 则先得到舍入后的 float 乘积，再转换为 double。后一种写法无法观察或纠正那一步乘法舍入；最终累计使用 double 也不能补回它。
+
+### 19. 抵消与有限值
+
+reference=0 不能做普通相对误差除法；reference 很小时，正负抵消会放大 relative error。sum_abs 描述所有乘积的总量级，可以构造针对点积的绝对误差预算。任何 actual 为 NaN/Inf 直接失败；NaN 的大小比较可能为 false，因此只写 `error>bound` 存在漏检。
+
+### 20. GFLOP/s 单位
+
+`2×256³=33554432` useful FLOPs。假设 t=0.5 ms：`33554432/(0.5×1e6)=67.108864 GFLOP/s`。这是题目给定时间的换算，不能描述为设备测量。FMA 按常用约定计 2 FLOP，不是 1 FLOP。
+
+### 21. 尾部效率
+
+Mp=48/Np=32/Kp=32，padded 迭代为 49152；有用迭代为 37×23×29=24679，比例约 50.21%。useful FLOPs=49358。多做无效迭代不能增加任务的有用工作量，所以所有方法报告相同 2MNK 分子。
+
+### 22. Tile 预算
+
+T=8/16/32：threads/block=64/256/1024，shared/block=512/2048/8192 bytes，理想 phase AI=2/4/8 FLOP/byte。选择还受寄存器、可驻留 block、同步频率、shape 尾部、K 长度与硬件限制影响。比较时先通过所有边界，再记录资源与时间；不能按 AI 一项排名。
+
+### 23. 实验交付标准
+
+至少提交 exact 与 decimal 两种输入、37×29×23 与一个更大矩阵，记录完整编译命令、GPU/CC/driver/Toolkit/cuBLAS、精度模式、原始每轮样本、统计、误差和 A/B 不变性。计时范围是单 stream 上 repeats 个 GEMM 的 Event 区间；说明初始化、复制和校验在外，短任务可能出现 host 提交间隙。没有 GPU 时提交待执行命令与预期结构，字段标 NOT RUN，不填写推测时间。
+
+### 24. 带 stride 和 alpha/beta 的独立实现
+
+最小 naive kernel 可写成：
+
+```cpp
+__global__ void gemm_strided(const float* a, const float* b, float* c,
+                              int m, int k, int n,
+                              int lda, int ldb, int ldc,
+                              float alpha, float beta) {
+    const int row = blockIdx.y * blockDim.y + threadIdx.y;
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= m || col >= n) return;
+    float acc = 0.0F;
+    for (int inner = 0; inner < k; ++inner) {
+        acc += a[static_cast<std::size_t>(row) * lda + inner] *
+               b[static_cast<std::size_t>(inner) * ldb + col];
+    }
+    const std::size_t index = static_cast<std::size_t>(row) * ldc + col;
+    const float old_c = beta == 0.0F ? 0.0F : c[index];
+    c[index] = alpha * acc + beta * old_c;
+}
+```
+
+host 检查 lda≥K、ldb≥N、ldc≥N，使用 size_t 分配 A=M×lda、B=K×ldb、C=M×ldc 个 float，再乘 sizeof(float) 得 bytes。初始化合法 A/B/C_old，padding 写已知 sentinel；CPU 按同一 stride 与 alpha/beta 做 double 参考。每次重复实验恢复相同 C_old，并在计算后检查合法输出、A/B 不变及 C padding 不变。
+
+一个有用用例是 M=3/K=5/N=2、lda=8/ldb=4/ldc=5，alpha=2/beta=3。另测 beta=0，令合法旧 C 为 NaN，验证实现确实不读取旧值；测 beta=1 时按每次恢复的约定验证。扩展为 tiled 时 global 下标用实际 stride，shared 内下标与阶段协议仍保持本章结构。
