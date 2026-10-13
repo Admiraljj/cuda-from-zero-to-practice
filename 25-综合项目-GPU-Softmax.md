@@ -912,6 +912,8 @@ int main(int argc,char** argv) {
 
 主程序比数学kernel长，原因不是Softmax数学复杂，而是它明确承担CLI、参考、资源、GPU可用性、guard、错误、完成、比较与计时。分阶段先学每项职责，再读完整main，避免把这些都当成“可以略去的样板”。
 
+这里auto launch/reset_output/validate/cleanup是host端C++ lambda，[&]按引用借用作用域内实际使用的变量，分别封装提交、复位、验证与收尾；定义对象不执行它，调用才执行。语法初次解释见[第22章22.8](22-Thrust-CUB-cuBLAS与库优先原则.md)。它们没有自动变成GPU kernel，也不是Graph capture。
+
 ## 25.24 沿main的数据流读，不沿行数死记
 
 读取顺序：

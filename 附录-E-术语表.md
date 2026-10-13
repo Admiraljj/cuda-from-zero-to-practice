@@ -73,6 +73,7 @@
 | 术语 | 含义/边界 | 详细章节 |
 |---|---|---|
 | Declaration / Definition | 告诉类型签名 / 提供实体实现，不是多include就补定义 | 1、23 |
+| Host lambda / Capture list | C++可调用对象 / 借用或保存外层变量，不等于CUDA Graph capture或kernel | 22、25、26 |
 | Translation unit | 预处理后参与独立编译的源单元，guard作用不跨全部源 | 23 |
 | NVCC | 协调host/device编译链接的驱动，不是GPU运行命令 | 3、23 |
 | Object / Host link / Device link | 对象文件 / host定义解析 / device跨单元引用解析 | 23 |

@@ -326,6 +326,25 @@ op(x,y) 调用这个对象的 operator()，返回 alpha*x+y。
 
 binary transform 的参数依次为 policy、first1、last1、first2、output、operation。第二个输入没有单独的 end，因此调用者必须保证它至少有 `last1-first1` 项。契约与允许的原地情况见[Thrust transform 接口](https://github.com/NVIDIA/cccl/blob/v2.5.0/thrust/thrust/transform.h)。
 
+### 后面的host组织为什么出现auto与[&]
+
+本章稍后的benchmark把“提交一次”和“验证一次”写成小的host可调用对象，这种语法叫C++ lambda。先看一个只涉及普通变量的片段：
+
+```cpp
+int completed = 0;
+auto mark = [&]() { ++completed; };
+mark();
+mark(); // completed now equals 2
+```
+
+auto让编译器推导mark这个lambda对象的类型，不表示“随便一种类型”。[&]是捕获列表：函数体使用外层自动变量时按引用借用；空的()是本例参数列表；花括号中是被调用时执行的函数体。定义mark不会先执行两次++，只有mark()才执行。
+
+例如auto submit=[&](int method){...};表示带一个int参数的host可调用对象；它借用当前作用域内实际使用的指针、stream等变量。借用这些变量不复制它们指向的CUDA数组，不分配device memory，也不会把lambda自动变成kernel。
+
+本书这些lambda只用于host端减少重复组织代码，不把捕获lambda传给device算法，不要求额外device-lambda编译扩展。C++捕获也不是第21章的Graph capture：前者是一个对象怎样持有外层变量，后者是怎样记录CUDA工作流。
+
+按引用借用的变量必须活到调用结束；不要把引用局部变量的lambda保存起来，在外层函数结束后继续调用。相同原则也用于后章launch/reset_output/validate/cleanup/ensure，届时只说明它们的新职责，不重新讲一遍全部语法。
+
 ## 22.9 完整手写/Thrust SAXPY 对照
 
 完整 `thrust_saxpy.cu`：

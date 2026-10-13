@@ -340,6 +340,8 @@ host selected_host/after/sum_sentinel的生命周期跨过catch与cleanup wait�
 
 如果scratch还被别的stream并发使用，不能直接free/grow。此程序只单stream顺序操作，count完成点明确；扩到流水线时每槽要有独立workspace或有可证明的复用依赖。
 
+ensure/cleanup使用第22章讲过的[host lambda](22-Thrust-CUB-cuBLAS与库优先原则.md)：按引用借用scratch/capacity或错误状态，在当前调用期间管理资源，不把这个对象当device算法或异步回调。变量和Async缓冲的生命周期仍由前述完成协议保证。
+
 这个设计优先清楚与正确，不是优化count往返。若性能需求要去掉host依赖，必须重新设计device count消费/Graph节点/容量协议，并保留原baseline作为对照。
 
 ## 26.10 main把前置检查、执行、证据分开
