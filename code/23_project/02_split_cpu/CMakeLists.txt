@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.24)
+project(book23_split LANGUAGES CXX)
+add_executable(book23_split main.cpp transform.cpp)
+target_compile_features(book23_split PRIVATE cxx_std_17)
+include(CTest)
+if(BUILD_TESTING)
+  add_test(NAME book23_split COMMAND book23_split)
+endif()

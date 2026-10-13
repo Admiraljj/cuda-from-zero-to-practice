@@ -1,0 +1,115 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "cpu-release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/cpu-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BOOK23_ENABLE_CUDA": "OFF",
+        "BOOK23_ENABLE_CUBLAS": "OFF",
+        "BUILD_TESTING": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "cpu-debug",
+      "inherits": "cpu-release",
+      "binaryDir": "${sourceDir}/build/cpu-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "cuda-release",
+      "inherits": "cpu-release",
+      "binaryDir": "${sourceDir}/build/cuda-release",
+      "cacheVariables": {
+        "BOOK23_ENABLE_CUDA": "ON",
+        "CMAKE_CUDA_ARCHITECTURES": "$env{BOOK23_CUDA_ARCHS}"
+      }
+    },
+    {
+      "name": "cublas-release",
+      "inherits": "cuda-release",
+      "binaryDir": "${sourceDir}/build/cublas-release",
+      "cacheVariables": {
+        "BOOK23_ENABLE_CUBLAS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "cpu-release",
+      "configurePreset": "cpu-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "cpu-debug",
+      "configurePreset": "cpu-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "cuda-release",
+      "configurePreset": "cuda-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "cublas-release",
+      "configurePreset": "cublas-release",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "cpu-release",
+      "configurePreset": "cpu-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "cpu-debug",
+      "configurePreset": "cpu-debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "cuda-release",
+      "configurePreset": "cuda-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "cublas-release",
+      "configurePreset": "cublas-release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

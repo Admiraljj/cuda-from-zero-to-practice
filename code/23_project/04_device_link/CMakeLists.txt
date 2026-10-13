@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.24)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR "${CMAKE_CUDA_ARCHITECTURES}" STREQUAL "")
+  message(FATAL_ERROR "Set verified CMAKE_CUDA_ARCHITECTURES")
+endif()
+project(book23_device_link LANGUAGES CXX CUDA)
+find_package(CUDAToolkit REQUIRED)
+add_executable(book23_device_link main.cpp launch.cu device_math.cu)
+target_compile_features(book23_device_link PRIVATE cxx_std_17)
+target_link_libraries(book23_device_link PRIVATE CUDA::cudart)
+set_target_properties(book23_device_link PROPERTIES
+  CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON
+  CUDA_SEPARABLE_COMPILATION ON CUDA_RUNTIME_LIBRARY Shared)
+target_compile_options(book23_device_link PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+include(CTest)
+if(BUILD_TESTING)
+  add_test(NAME book23_device_link COMMAND book23_device_link)
+  set_tests_properties(book23_device_link PROPERTIES SKIP_RETURN_CODE 77 RUN_SERIAL TRUE TIMEOUT 60)
+endif()

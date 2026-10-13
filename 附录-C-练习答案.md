@@ -2655,3 +2655,135 @@ header not found 在预处理/编译阶段，查 include 与 Toolkit 组件；un
 规格必须写成“筛选后的正数平方和”，固定案例结果 25 而不是原始平方和 30。交付 CPU oracle、完整 GPU 流程和命令，覆盖 0/1/257/1031、none/all、非法参数与 int64 范围。先完成并验证 count 再决定后续范围；count=0 明确返回 0；selected 顺序与原始输入不变性逐项检查。
 
 资源表应列 input/selected/count/scalar/scratch 的所有者、容量、借用与完成点。同 stream 顺序可复用；跨流无依赖不能共用 scratch。记录查询/分配、选择、计数往返、归约和端到端范围，并与相同任务基线比较。没有 GPU 时标为未执行，不能把数学预期或模板编译能力当性能证据。
+
+## 第 23 章
+
+### 1. 数学契约
+
+输入 [-2,-0.5,0,1,2] 的输出为 [-3,0,1,3,5]。没有 ReLU，不能把 -3 改成 0。各阶段都使用 alpha=2/beta=1 的变换，重构应保持输入只读、另有输出与 CPU 参考；工程文件变化不是改变数学任务的理由。
+
+### 2. 三种角色
+
+声明给编译器函数名称、参数和返回类型，用来检查调用；定义提供函数体；调用请求该函数执行。看到声明不等于已经提供链接所需实现，看到定义也不代表已经运行。实现文件包含自己的公共头可让声明/定义不一致更早暴露。
+
+### 3. 编译与链接
+
+main.cpp 通过 transform.h 看见合法声明，因而编译器能检查调用类型；只把 main.cpp/object 交给链接器时没有 transform_cpu 定义，链接应失败。修复是将实现源/对象加入目标，不是随意改函数名、删调用或把 .h 当实现编译。
+
+### 4. 对象文件
+
+-c 让编译停在对象文件，-o 指定当前产物名字；是否最终 executable 取决于正在执行的阶段，不取决于名字像不像 app。main.o/transform.o 不是完整可运行程序；链接阶段把它们和所需库组合成 executable。
+
+### 5. Guard 的范围
+
+guard 防止同一个翻译单元重复展开头。两个 .cpp 各自有独立预处理环境，都会看见头里的普通非 inline 定义；因此仍可能重复定义。将普通实现放一份 .cpp，或正确使用模板/inline 规则，不能用 guard 冒充整个程序的全局唯一性控制。
+
+### 6. 头中的定义
+
+模板和符合规则的 inline 函数常需要在头里提供定义，以便各使用处见到它。inline 与 ODR/定义组织有关，不保证每次调用都机器码展开；优化器仍选择实际实现。若声明头与实现签名/宏上下文不一致，写 inline 也不是修复所有问题的按钮。
+
+### 7. 文件后缀
+
+.h/.cuh 在本章供 include；.cpp 用普通 host 编译；.cu 进入 CUDA 编译轨迹。改后缀不自动把函数变 kernel，普通 .cpp 也可以调用 Runtime host API，只需合法头和链接依赖。带三尖括号/device 语法的文件则不能直接当普通 C++ 源交给不支持 CUDA 的编译器。
+
+### 8. 两棵树
+
+source tree 保存源码、共享 CMake/preset、测试和学习说明；binary tree 保存 cache、生成构建文件、对象和 executable。用独立目录保护源码和区分配置。CMakeCache 是当前机器的发现结果，不应作为别人复现时必须复制的源文件。
+
+### 9. 五个证据阶段
+
+configure/generate 证明 CMake 能描述/发现当前构建组合；build 证明编译与链接成功；run 才执行算法；CTest 按指定规则启动程序、判断结果。即使全部没有失败，也要读 GPU skipped 数量；性能另需有实际测量协议，不能以构建成功代替运行证据。
+
+### 10. 实现源不可漏
+
+transform.cpp 提供实际定义，add_executable 中只放 main.cpp 与头无法满足链接。头列入目标可帮助 IDE 展示，但它的名字出现不等于函数实现被编译。CMake 的目标应包含实现所需完整源集合，而不是只收集看起来相关的文件名。
+
+### 11. 纯 host 公共 API
+
+backend.h 只使用 vector、float、string 等普通 C++ 类型，不暴露 CUDA 句柄或三尖括号，所以 main 的编译不用 Runtime 头。GPU 实现自己包括 cuda_runtime。若选择公开 cudaStream_t/cudaError_t，则像阶段四 launch.h 一样需要传播相应依赖；这不是绝对禁令，而是接口取舍。
+
+### 12. 异步内部与同步接口
+
+wrapper 内部按 stream 提交 Async copies/kernel，然后等待输出与输入快照完成，收尾资源后才返回。调用者不能在函数返回前继续提交下一工作，因为这个函数已经等待；因此公共接口是同步往返，不是device-resident异步launch。命名和文档必须与实际行为一致。
+
+### 13. Oracle 与 verifier
+
+reference 用 double 对实际输入算数学结果，verify 检查长度、finite 和当前受限数据的精确数值；CPU 实现与 GPU 分别调用计算路径。test_core 还故意给验证器长度错误、NaN、错误值，证明验证器会拒绝。输出几项日志或只检查一个标量不替代全数组验证。
+
+### 14. Seed 的含义
+
+seed 是确定公式 (i*17+seed)%31 的偏移，帮助改变输入和复现同一案例。它不是随机数库的 state，不保证统计随机或独立分布。记录 n/seed 和生成公式即可复现此数据，不需要假装调用了 cuRAND。
+
+### 15. Stub 不冒充后端
+
+stub 提供相同符号但返回 77 并说明未构建。若偷偷执行 CPU 后返回 CUDA PASS，就失去“究竟执行哪个设备”的证据，CTest 也无法区别可用性。stub/真实实现只选择一组，避免重复定义；empty 应用路径另说明不调用后端。
+
+### 16. 四种状态
+
+0 表示正常路径完成并按程序验证；1 表示执行、校验、分配或清理等真实失败；2 表示 CLI 拒绝；77 表示后端未构建或明确不可用。backend 返回 0 只表示其执行契约完成，main 仍做数学验证。CTest 的正常/拒绝/跳过规则分别处理它们，而不是看到非零就一律成功或跳过。
+
+### 17. 跳过不能吞错误
+
+只有明确 cudaErrorNoDevice、cudaErrorInsufficientDriver 或成功查询 count=0 等已定义可用性分支标77。其他设备查询、分配、launch、执行错误为失败，保留诊断。否则内存越界或驱动实际损坏可能被包装成“没设备”，造成测试假通过。
+
+### 18. 短路顺序
+
+check(...)&&ok 先执行检查/释放动作，再结合旧 ok；即使 ok=false 也尝试当前收尾。ok&&check(...) 会在 ok=false 时跳过右边动作。清理程序通常需要所有释放都被尝试，同时保留第一条诊断，不把短路优化写成资源遗漏。
+
+### 19. 使用要求
+
+PRIVATE 供本目标编译使用，PUBLIC 也传播给消费者，INTERFACE 仅作为消费者要求。本例 core 的 include/C++17 是 PUBLIC，CUDA flags 对 backend 是 PRIVATE。STATIC 库的必要链接依赖可能以 link-only 方式传到最终链接，不把 PRIVATE 误读成“最终程序不需要链接这份依赖”。
+
+### 20. Imported target
+
+CUDA::cublas 是 FindCUDAToolkit 提供的导入目标，描述已安装库和使用信息；它不下载/安装库，也不初始化 GPU。find_package 成功、链接成功和可用驱动/GPU是三个阶段。库状态、实际完成和 oracle 也仍由程序负责。
+
+### 21. CPU-only 源集合
+
+只启用 CXX，编译 core/main/backend_stub，不启用 CUDA language、不 find Toolkit、不链接 cudart/cuBLAS。公共头没有 CUDA 类型，CPU tests 只依赖 core。不是仅去掉 kernel launch，还把 cudaMalloc 与头文件留在无 CUDA 环境里。
+
+### 22. 依赖组合拒绝
+
+本工程的 cuBLAS backend 依赖 CUDA 执行/资源和对应 .cu 编译，所以 CUBLAS=ON/CUDA=OFF 无法提供已承诺的实现，配置阶段应明确拒绝。不能以默默忽略选项或偷偷回退 CPU 掩盖冲突，用户必须知道实际构建了哪些能力。
+
+### 23. 多份 .cu 不等于 RDC
+
+阶段三的每个 kernel 与调用它的 wrapper 在同一 .cu；不同文件之间是普通 host 接口调用/库链接，没有 device 函数引用另一个 .cu 定义。因此一般 host 多文件链接足够。不要因文件数增加就一律 CUDA_SEPARABLE_COMPILATION=ON。
+
+### 24. 真正跨 device TU
+
+launch.cu 中 apply kernel 调用 device_math.cu 定义的 device_affine。device_math.cuh 仅提供声明，device 引用需要跨翻译单元解析。这与 main.cpp 调用 launch_device_math 的 host wrapper 是不同边界，guard 和 Runtime 链接不能替代 device link。
+
+### 25. 三个术语
+
+-dc 是可重定位 device 编译加 -c，输出对象；-rdc=true 允许生成这类 device code；device link 解析跨对象的 device 符号并形成可执行 device code。最终 nvcc 可协调 device 与 host link。所有对象和最终设备链接的目标架构需兼容，不混抄不同阶段的架构。
+
+### 26. 架构语法
+
+CMake ARCHITECTURES 示例值80表示架构配置编号，nvcc -arch示例sm_80用编译器语法；都与已核对设备的8.0能力相关，不是通用答案。80;86必须作为单参数引用给CMake，避免shell将分号拆成命令。多个架构改变产物覆盖与大小，不同时让一张GPU执行两份kernel。
+
+### 27. 配置不是保证
+
+Debug不主动打印，也不必自动包含device -G；本工程显式选项只在CUDA+Debug追加-G。Release名字不证明实际优化flags正确或已测性能。lineinfo用于源码关联，不是变量日志；-G的调试/优化影响不适合当Release性能对照。多配置generator使用--config与CTest -C。
+
+### 28. Preset 字段
+
+version是schema，非项目/CUDA版本；inherits继承共享字段；binaryDir隔离构建组合；架构从BOOK23_CUDA_ARCHS读取是明确用户选择，不猜构建机GPU。共享Presets可提交，UserPresets放个人路径不提交。该preset要求Ninja；没有它时选前面默认generator命令。
+
+### 29. CTest 筛选
+
+-N只列测试、不执行；-R匹配测试名；-L匹配label；--output-on-failure显示失败输出，-V更详细。CTest不会先自动构建一般未生成的executable。RUN_SERIAL限制当前CTest里的并发，不独占服务器GPU；仍记录其他负载和skipped数量。
+
+### 30. 精确拒绝
+
+任意非零可能是崩溃、丢失库、执行错误或超时，不证明CLI按设计拒绝。脚本要求真实exit2与stderr Usage，并拒绝找不到程序等异常。它不把全书旧WILL_FAIL测试都判无效，而是在本章给出更明确的接口状态验收。
+
+### 31. 共享与私有
+
+共享源码commit、dirty说明、依赖版本、配置/build/test命令、输入生成与测试/skip结果；个人账号、令牌、登录信息、机器绝对路径、cache与build产物不作为仓库材料。不同GPU/驱动可能性能不同，可复现首先是过程和数学证据清楚，而不是承诺耗时一样。
+
+### 32. 独立工程交付
+
+CPU固定筛选后平方和案例应为25；不误用原始平方和30。交付纯host公开头、独立CPU core/oracle/validator、可选CUDA库backend、明确workspace/count/完成契约，配置组合可解释。覆盖空/单项/尾部/none/all、非法参数与不可用，正常/拒绝/skip/失败各有测试规则。
+
+保存新目录中的完整构建命令、实际flags与GPU/库版本、测试数量和每个未执行原因；不需要先做复杂框架。没有工具链时明确未编译；只有GPU确实执行并验证后才记录GPU通过，性能实验另写范围和协议。

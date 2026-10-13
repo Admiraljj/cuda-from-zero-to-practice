@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#a9b5be"/></marker></defs>
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">配置、编译、链接、测试：不是同一个“运行命令”</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2"><rect x="60" y="105" width="300" height="145" rx="10"/><rect x="440" y="105" width="320" height="145" rx="10"/><rect x="840" y="105" width="300" height="145" rx="10"/><rect x="60" y="335" width="1080" height="150" rx="10"/><rect x="60" y="550" width="1080" height="100" rx="10"/></g>
+<g stroke="#a9b5be" stroke-width="3" marker-end="url(#a)" fill="none"><path d="M360 175H433"/><path d="M760 175H833"/><path d="M990 250V328"/><path d="M600 485V543"/></g>
+<g font-size="23"><text x="82" y="147">cmake -S ... -B ...</text><text x="462" y="147">cmake --build ...</text><text x="862" y="147">生成 executable</text></g>
+<g font-size="19"><text x="82" y="192">读取 CMakeLists / options</text><text x="82" y="225">生成构建系统与 cache</text><text x="462" y="192">调用编译器 / 链接器</text><text x="462" y="225">增量构建目标与依赖</text><text x="862" y="192">链接定义、对象与库</text><text x="862" y="225">不是已经跑过算法</text></g>
+<text x="84" y="375" font-size="23">main.cpp + header → main.o；transform.cpp + header → transform.o</text><text x="84" y="417" font-size="23">main.o + transform.o → 可执行文件</text><text x="84" y="457" font-size="19" fill="#b4c6af">header 的声明进入各翻译单元；通常不单独产生一个 header.o。</text>
+<text x="84" y="588" font-size="23">ctest --test-dir ... → 真正启动已构建程序，检查退出码与测试规则</text><text x="84" y="625" font-size="19">只有配置成功 / 编译成功，仍不能声称 GPU 已完成、结果已验证或性能已测量。</text>
+</g></svg>

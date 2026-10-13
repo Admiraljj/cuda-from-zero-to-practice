@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">测试状态：通过、预期拒绝、跳过与失败不能合并</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2"><rect x="60" y="110" width="1080" height="105" rx="10"/><rect x="60" y="245" width="1080" height="105" rx="10"/><rect x="60" y="380" width="1080" height="105" rx="10"/><rect x="60" y="515" width="1080" height="105" rx="10"/></g>
+<g font-size="25"><text x="83" y="150">0：正常完成 + 验证</text><text x="83" y="285">2：命令行拒绝</text><text x="83" y="420">77：功能 / 设备不可用</text><text x="83" y="555">1：真实错误</text></g>
+<g font-size="20"><text x="430" y="153">正常测试接受；空输入只证明应用的空范围契约。</text><text x="430" y="288">负例脚本要求“恰好 2 + Usage”，不能接纳任意崩溃。</text><text x="430" y="423">只有指定测试设置 SKIP_RETURN_CODE=77；不是 GPU 通过。</text><text x="430" y="558">API、分配、执行、校验或清理失败；不能伪装成跳过。</text></g>
+<text x="83" y="190" font-size="18" fill="#b4c6af">configure / build 成功不属于这个退出码。</text><text x="83" y="325" font-size="18">仍须核对错误文本与测试目的。</text><text x="83" y="460" font-size="18">检查 CTest 报告中的 skipped 数量。</text><text x="83" y="595" font-size="18">保留第一条诊断，修复后重新验证。</text>
+</g></svg>

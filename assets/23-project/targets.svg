@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#a9b5be"/></marker></defs>
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">同一 host 接口，三种构建组合：main 不必认识三尖括号</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2"><rect x="360" y="105" width="480" height="110" rx="10"/><rect x="60" y="300" width="440" height="150" rx="10"/><rect x="640" y="300" width="500" height="150" rx="10"/><rect x="60" y="520" width="1080" height="120" rx="10"/></g>
+<g stroke="#a9b5be" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M480 215L283 293"/><path d="M720 215L887 293"/></g>
+<text x="384" y="147" font-size="25">book23_app：src/main.cpp</text><text x="384" y="187" font-size="19">host 接口；统一验证与退出码</text>
+<text x="84" y="341" font-size="24">book23_core：core.cpp</text><text x="84" y="382" font-size="20">输入、参数解析、CPU oracle、验证器</text><text x="84" y="421" font-size="19" fill="#b4c6af">PUBLIC：include 与 C++17 使用要求</text>
+<text x="664" y="341" font-size="24">book23_backends：由 option 选源文件</text><text x="664" y="382" font-size="20">backend_stub.cpp 或 cuda_backend.cu</text><text x="664" y="421" font-size="19">可选 cuBLAS 实现 + 库链接</text>
+<text x="84" y="559" font-size="22">CPU-only：无需启用 CUDA 语言；调用 CUDA 后端时明确返回 77。</text><text x="84" y="602" font-size="20">开启 CUDA：.cu 内部负责 device 资源与完成点；host wrapper 是同步往返接口。</text>
+</g></svg>
