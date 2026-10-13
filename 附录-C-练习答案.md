@@ -2539,3 +2539,119 @@ host submit 测 CPU 提交循环，host complete 还含 Event record 和最终�
 最低交付包括：数学规格、逐元素 CPU oracle、普通/Graph/fused 完整源码与命令、0/1/257/1031 输入、负/零/正值、非法参数拒绝、NaN sentinel、输入不变性、最后完成点和释放顺序。alpha/beta 更新至少验证两组不同结果；shape 改变同时处理 grid/copy/capacity，安全回退有独立输出验证。
 
 提交性能记录时附 GPU/driver/Toolkit、Release 命令、预热、轮换样本、提交/完成/Event 三范围、构图/上传/更新成本和无 profiler 基线；用 Systems 解释收益来源。即使 Graph 没有明显收益，只要证据充分并选择简单正确实现，也满足工程判断要求。进阶 graph-fused 比较必须注明是改变提交方式，不能把三节点与一节点的所有差异算给 Graph。
+
+## 第 22 章
+
+### 1. 接口职责
+
+Runtime 组织分配、拷贝和队列；Driver 更显式地组织上下文、模块与启动；Thrust/CUB/cuBLAS 提供特定算法表达或实现。cudaMalloc 不会自动排序；cuLaunchKernel 不会自动给出 GEMM；cublasGemmEx 也不会代替你管理业务输入和完成点。调用库不要求先改写 Driver 主线，两者不是高低水平程序员的分界。
+
+### 2. SAXPY
+
+五项结果为 [-3,1,-1,2.5,1]。alpha 是乘 x 的标量，本例是无量纲系数；如果 x/y 表示实际物理量，单位必须使 alpha*x 与 y 可以相加。不能说“alpha 就是线程数”或把它与 n 混淆。每个 i 配对相同位置 x[i] 和旧 y[i]。
+
+### 3. 恢复与递推
+
+不恢复 y 时，三轮得到 y0+3*alpha*x；每轮独立任务则应都计算 y0+alpha*x。公平比较应让所有方法采用同一种协议。本章每 workflow 为所有方法做 y0→output D2D 恢复，再执行 SAXPY，计时明确包含恢复；不能只给 cuBLAS 加复制，却把手写输出直接覆盖的时间称为同范围。
+
+### 4. 四种答案
+
+sum=4；exclusive scan=[0,-2,-2,1,0]；positive select=[3,4]、count=2；原序列平方和=30。选中序列平方和则是 25，属于另一个规格。把这两个结果混淆，说明没有先定义归约范围，而不是库算错。
+
+### 5. 所有权
+
+device_vector 拥有其分配，正常析构释放；cudaMalloc 的原始指针由调用方负责 cudaFree。raw_pointer_cast/device_pointer_cast 不建立第二份所有权，也不复制数组。若手动释放容器地址，随后析构可能再次释放；若容器重分配，旧地址/iterator 也可能失效。并行任务借用期间不得重分配或结束所有者生命周期。
+
+### 6. 左闭右开
+
+n=5 的有效位置是 begin+0..begin+4；end=begin+5 只作边界，不能解引用。last-first 是项数，不是 bytes。统一的 [first,last) 能自然表达空范围 first==last，也方便子范围组合，不用每次为了“包含最后一项”额外加减。
+
+### 7. 包装不是搬运
+
+device_pointer_cast 只产生标记为 device 的迭代表示，不上传数据、不分配、不取得所有权。误包普通 host 地址并交给 CUDA 算法，不会把它变成合法 device 输入。若使用 Unified Memory 或映射 host memory，必须额外核对可访问性与依赖，不能用这些特殊机制为任意 host 指针辩护。
+
+### 8. 第二范围容量
+
+binary transform 用 first1/last1 确定 n，然后从 first2 连续读取 n 项；接口没有第二个 end 替你核对容量。调用方必须确保第二输入与输出至少 n 项、访问位置合法。设备内存容量来自之前分配，不会因迭代器表达式自动扩张。
+
+### 9. 函数对象
+
+alpha 是对象保存的标量；operator() 把两个当前元素映射到返回值；host/device 指编译位置，不意味着自己启动一个 kernel；const 表示不修改函数对象的成员。算法并行调用多个位置，函数对象不应偷偷写一个所有线程共享的无同步全局累加器。
+
+### 10. sort 的 oracle
+
+sort 原地改变 device data 的顺序，应与 CPU 排序副本全量比较。sum 相同仅说明一个不变量，不能证明有序、元素未丢失/重复或稳定性。本例只验排序后的整数值，不把相同键对应的对象稳定顺序当作普通 sort 的保证。
+
+### 11. 同步策略
+
+par.on(stream) 在本章核对版本含 stream 同步语义；par_nosync 请求避免非必要同步，但算法可为正确性等待。reduce 返回 host scalar，必须提供有效结果，不能保证返回前不等 GPU。即使 nosync 工作在同 stream 正确排序，CPU 读取或改写借用内存仍需要相关完成点。
+
+### 12. 变换迭代器
+
+构造 transform_iterator 只保存底层 iterator 和操作对象；解引用某个位置时取得该位置原值并调用操作，不立即生成一份 n 项数组。它避免用户 squares 中间数组，但库仍可能有内部 workspace 和多阶段 kernel。是否改善性能要测，不能从“不分配 squares”推导“零临时空间或一 kernel”。
+
+### 13. 类型一致
+
+0LL 提供 long long 初值，Square 返回 long long，plus<long long> 组合宽整数；输入和输出不因某一个变量宽就自动全宽。两个 1,500,000,000 的和超过 int；过窄初值/操作可能导致错误归约。若平方先发生在 int 上并溢出，随后转 long long 无法修复。本章小范围数据本身有界，类型例子不是声称其所有输入必然溢出。
+
+### 14. CUB 作用域
+
+DeviceReduce 从 host 调用，组织 device 范围的工作，可内部启动多个 kernel；BlockReduce 在你自己的 kernel 内使用，按 block 组织线程和 shared TempStorage。后者不自动跨 block 合并；其输出有效线程要读对应契约。只知道类名带 Reduce 不足以互换调用位置。
+
+### 15. 查询与执行
+
+第一个参数 nullptr 表示查询所需临时 bytes，不执行该算法结果计算；非空合法 scratch 加足够 available capacity 才提交工作。query 得到 host size_t 容量，执行结果写到独立 device 输出。不能查询后直接 D2H 当结果，也不能把 d_sum 当 workspace 使用。
+
+### 16. 四个数量
+
+queried_bytes 是某算法当前契约所需字节；capacity 是实际分配的工作区总字节；available 是本次传给 API 的可修改容量值；n 是输入元素数。程序每个执行前 available=capacity，保留完整分配预算。数据 bytes 则为 n*sizeof(T)，与 workspace 不必成比例，也不能互换。
+
+### 17. 复用容量与并发
+
+同 stream 顺序复用至少 20 KiB，取查询值最大值，不取 8+20+12，也不取最小值。若三任务真正并发借用，需要不重叠存储区域/独立分配，或加入依赖使使用串行。独立分配的总需求至少分别满足三者；若切一个大块还要处理对齐，不能只相加后随意偏移。
+
+### 18. 容量与有效长度
+
+n 是 select 最坏输出容量，count 是本轮实际有效项数。先等选择完成、复制 count，检查 0<=count<=n 及 CPU 期望，再用 count 计算拷贝和后续算法范围。count=0 不复制不存在的前缀，不读 selected[0]。不能因为分配够 n 就把无效尾部当结果。
+
+### 19. Stable select
+
+CPU 按原顺序遍历，遇到 >0 就追加；GPU selected 前缀应逐项等于这份列表，count 也相同。none 分布 count=0；all 分布 count=n，输出等于原始序列。只验证每个输出都正不能发现顺序改变、重复或漏项。
+
+### 20. 两种错误类型
+
+Runtime 返回 cudaError_t，cuBLAS 返回 cublasStatus_t。虽然都能转换成整数，语义和状态集合不同，不能交给同一 cudaGetErrorString 解释。还要分清库提交状态与之后的 stream 完成状态；库返回 SUCCESS 不替代 oracle、guard 和输入不变性检查。
+
+### 21. Stride
+
+x 最小长度为 (4-1)*2+1=7，y 为 (4-1)*3+1=10。物理合法项分别是 x 的 0/2/4/6 与 y 的 0/3/6/9。inc 的单位是元素；分配 bytes 还要再乘 sizeof(float)。本章 wrapper 限制正 stride，不据此声称 cuBLAS 本身没有负 stride。
+
+### 22. Pointer mode
+
+它决定 alpha/beta 等标量指针指向 host 还是 device，不改变向量/矩阵必须在哪。HOST 用 &alpha，DEVICE 用 device scalar 地址；多个 scalar 要同一种 mode。device scalar 由前序上传/producer 准备，依赖与生命周期和普通 device 数组一样需要保护。
+
+### 23. Padded GEMM
+
+row-major A[M,K] 每行 lda=K+pad，同地址视图 Aᵀ[K,M] 在 column-major 中相邻列仍跨 lda 个元素，因此 leading dimension 不变。GemmEx 求 Cᵀ：m=N,n=M,k=K，第一个矩阵 db/leading=ldb，第二个 da/leading=lda，输出 dc/leading=ldc，两个 op=N。不能交换指针却忘交换相关物理 stride。
+
+### 24. 旧 C 是输入
+
+beta!=0 时库需要读取 C_old；用 NaN 填满 C 后计算会引入 NaN，不能当覆盖测试。每轮恢复同一合法 c0，包括 padding，按 alpha*AB+beta*C0 验证。beta=0 是单独协议，可对输出毒化检查覆盖，不把两种初始化规则混用。
+
+### 25. 精确比较的边界
+
+本章 A/B 是小分子/16，乘积为分子/256，K<=256 保持部分和小且精确；alpha=2/beta=0.5 与 C0 的 /8 也保持 dyadic 精确数。严格 FP32 配置与有限值检查使当前受限任务能数值精确比较。普通十进制、长点积或不同低精度路径应采用说明过的容差/高精度参考，不要求一切 FP32 等于 double。
+
+### 26. 测量范围
+
+每 workflow 为 y0→output D2D 恢复+SAXPY；Event 包含这段与可能供给空隙，host complete 还含记录/提交/等待；分配、上传、D2H 和验证在区间外。par 的同步与 nosync 的请求差异单列，不能把全部变化称为 device 算法快慢。四方法数学、复位、输入、输出容量和验证均相同。
+
+### 27. 三个阶段
+
+header not found 在预处理/编译阶段，查 include 与 Toolkit 组件；undefined reference 在链接阶段，查 -lcublas/CUDA::cublas；运行时缺 .so 在加载阶段，查实际共享库搜索路径和版本。修一个阶段不要随意改另一个阶段的数学代码，更不要复制任意同名库文件掩盖环境问题。
+
+### 28. 独立项目验收
+
+规格必须写成“筛选后的正数平方和”，固定案例结果 25 而不是原始平方和 30。交付 CPU oracle、完整 GPU 流程和命令，覆盖 0/1/257/1031、none/all、非法参数与 int64 范围。先完成并验证 count 再决定后续范围；count=0 明确返回 0；selected 顺序与原始输入不变性逐项检查。
+
+资源表应列 input/selected/count/scalar/scratch 的所有者、容量、借用与完成点。同 stream 顺序可复用；跨流无依赖不能共用 scratch。记录查询/分配、选择、计数往返、归约和端到端范围，并与相同任务基线比较。没有 GPU 时标为未执行，不能把数学预期或模板编译能力当性能证据。

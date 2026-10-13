@@ -1045,4 +1045,4 @@ nsys stats graph_overview.nsys-rep
 
 本章的 Graph 不依赖特定算法库，但你已知道一个库调用也可能展开成多个工作节点。下一章会从 Runtime/Driver/算法库的层次开始，讲 Thrust、CUB、cuBLAS 的数据布局、临时空间、stream、错误检查与正确性对照；它不是“找到 API 名称就不用理解参数”。
 
-下一章尚待教材化完善，不把旧短稿当作已完成章节。官方继续阅读入口：CUDA Graphs 功能章节、Runtime Graph Management 与 CUDA 12.6.3 归档均已在相应知识点引用；本章的 CPU 模型、图片和源码是按这条教学路线独立编写的，而不是复制官方长篇内容。
+继续阅读[第 22 章：Thrust、CUB、cuBLAS 与库接口契约](22-Thrust-CUB-cuBLAS与库优先原则.md)。官方继续阅读入口：CUDA Graphs 功能章节、Runtime Graph Management 与 CUDA 12.6.3 归档均已在相应知识点引用；本章的 CPU 模型、图片和源码是按这条教学路线独立编写的，而不是复制官方长篇内容。

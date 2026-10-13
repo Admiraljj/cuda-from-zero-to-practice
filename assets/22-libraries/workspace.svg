@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#a9b5be"/></marker></defs>
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">CUB 临时空间：先查容量，按依赖借用，不是结果数组</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2"><rect x="60" y="105" width="290" height="150" rx="10"/><rect x="440" y="105" width="320" height="150" rx="10"/><rect x="850" y="105" width="290" height="150" rx="10"/><rect x="60" y="335" width="1080" height="115" rx="10"/><rect x="60" y="505" width="1080" height="125" rx="10"/></g>
+<g stroke="#a9b5be" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M350 180H433"/><path d="M760 180H843"/></g>
+<g font-size="23"><text x="83" y="145">Query(nullptr, bytes)</text><text x="463" y="145">Allocate(scratch, capacity)</text><text x="873" y="145">Execute(scratch, ...)</text></g>
+<g font-size="19"><text x="83" y="190">获得算法需要的字节数</text><text x="83" y="225">不执行该算法结果计算</text><text x="463" y="190">至少满足查询容量</text><text x="463" y="225">分配在重复调用与计时外</text><text x="873" y="190">把工作提交到 stream</text><text x="873" y="225">完成后才能释放 / 跨流复用</text></g>
+<text x="83" y="375" font-size="23">同一 stream：Reduce → Scan → Select → done</text><text x="83" y="417" font-size="20" fill="#b4c6af">同一 scratch 可顺序借用；容量取各查询值最大值，不能取最小值。</text>
+<text x="83" y="546" font-size="23">不同 stream：Reduce ──┐　　Scan ──┐</text><text x="83" y="590" font-size="20">若实际重叠，不能同时写同一 scratch；使用独立分配，或明确 event 依赖使其串行。</text>
+</g></svg>

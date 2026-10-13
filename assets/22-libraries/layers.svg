@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#a9b5be"/></marker></defs>
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">“调用 CUDA API”与“调用算法库”：两种职责，不是互相替代</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2"><rect x="60" y="95" width="1080" height="85" rx="10"/><rect x="60" y="245" width="300" height="160" rx="10"/><rect x="440" y="245" width="320" height="160" rx="10"/><rect x="840" y="245" width="300" height="160" rx="10"/><rect x="60" y="475" width="1080" height="75" rx="10"/><rect x="60" y="600" width="1080" height="65" rx="10"/></g>
+<g stroke="#a9b5be" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M210 180V238"/><path d="M600 180V238"/><path d="M990 180V238"/><path d="M210 405V468"/><path d="M600 405V468"/><path d="M990 405V468"/><path d="M600 550V593"/></g>
+<text x="85" y="133" font-size="24">你的应用：定义输入 / 输出，准备资源，建立依赖，验证结果</text><text x="85" y="163" font-size="19">可以混用手写 kernel、算法库与 Runtime 管理；库不自动理解你的业务契约。</text>
+<g font-size="23"><text x="82" y="282">Runtime / 手写 kernel</text><text x="462" y="282">Thrust / CUB</text><text x="862" y="282">cuBLAS</text></g>
+<g font-size="19"><text x="82" y="324">分配、拷贝、stream/event</text><text x="82" y="359">你写并行计算与索引</text><text x="82" y="389">不是现成排序 / GEMM</text><text x="462" y="324">通用并行算法 / 原语</text><text x="462" y="359">iterator、policy、workspace</text><text x="462" y="389">头文件模板进入你的构建</text><text x="862" y="324">BLAS 向量 / 矩阵操作</text><text x="862" y="359">handle、布局、标量位置</text><text x="862" y="389">还需链接 cuBLAS 库</text></g>
+<text x="85" y="507" font-size="22">底层 CUDA 执行基础：Runtime / Driver、设备上下文、提交与完成</text><text x="85" y="536" font-size="18">此图按职责概括，不要求每个库内部都经过完全相同的调用链。</text>
+<text x="85" y="640" font-size="23" fill="#b4c6af">GPU：实际执行 kernel / 传输；调用返回与 GPU 完成仍须分开。</text>
+</g></svg>

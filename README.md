@@ -4,7 +4,7 @@
 
 学习顺序是：先理解问题与数据，再手算线程分工，阅读完整程序，逐行理解新增语法，运行并验证结果，最后独立修改和练习。这不是速查表，也不是 NVIDIA 官方指南的逐页译本。
 
-> 当前发布第 1—21 章的教材化修订版，后续内容将逐章完善。
+> 当前发布第 1—22 章的教材化修订版，后续内容将逐章完善。
 >
 > 文中的示例输出为预期结果；案例尚未完成实机验证，请在自己的开发环境中编译运行并核对。
 
@@ -31,14 +31,17 @@
 19. [Occupancy、寄存器与资源权衡](19-Occupancy-寄存器与资源权衡.md)
 20. [Stream、Event、Pinned Memory 与有限槽位流水线](20-Stream-Event-Pinned-Memory与流水线.md)
 21. [CUDA Graphs：捕获、参数更新与可复用工作流](21-CUDA-Graphs与重复工作流.md)
+22. [Thrust、CUB、cuBLAS：正确调用库与建立基线](22-Thrust-CUB-cuBLAS与库优先原则.md)
 
-配套：[练习答案（第 1—21 章）](附录-C-练习答案.md)
+配套：[练习答案（第 1—22 章）](附录-C-练习答案.md)
 
 第 16 章包含 23 节、6 个完整程序、2 张本地暗色图和 24 道练习：从 shape/点积/线性下标，逐步写 naive、shared tiled GEMM，再推导 cuBLAS 布局、精度与统一 benchmark。命令入口见[第 16 章案例目录](code/16_matmul/README.md)。
 
 第 17—20 章新增 87 节、10 个完整程序、1 个数学参考头文件、5 张暗色图和 96 道练习及详细答案。路线是卷积四方法对照 → Systems/Compute 分析 → 资源预算与启动扫描 → 异步往返、事件汇合与串行/流水线对照。各章给出边界测试与可执行的服务器验收命令。
 
 第 21 章包含 26 节、6 个完整程序、2 个辅助头文件、2 张暗色图和 24 道练习及详细答案。先用 CPU 手算依赖和摊销，再学习完整往返 capture、参数值与内容、失败恢复、单节点/整图更新与安全重建、跨 stream fork/join，以及普通排队/Graph/融合的公平对照。命令见[第 21 章案例目录](code/21_graphs/README.md)。
+
+第 22 章包含 31 节、8 个完整程序、2 个辅助头文件、3 张暗色图和 28 道练习及详细答案。从 CPU 契约到 Thrust 容器/范围/函数对象/策略，再到 CUB 归约、Scan、稳定筛选与顺序工作区复用，最后验证 cuBLAS stride、两种标量模式、非零 beta 的 padded 非方阵 GEMM，以及四方法公平对照。命令见[第 22 章案例目录](code/22_libraries/README.md)。
 
 第 1 章只需要 C++17 编译器，不需要 GPU。第 2 章起以 Linux、NVIDIA GPU、CUDA Toolkit 为主线；环境检查和命令解释放在正文中。请按顺序阅读，不必预先掌握指针、warp、SIMT 或编译选项。
 
@@ -61,6 +64,7 @@
 - [CUDA Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html)：正确性、访存与性能分析。
 - [Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html) 与 [CUDA-GDB](https://docs.nvidia.com/cuda/cuda-gdb/index.html)：错误诊断和调试。
 - [cuBLAS](https://docs.nvidia.com/cuda/cublas/index.html)：矩阵计算、布局与精度接口。
+- [NVIDIA CCCL](https://github.com/NVIDIA/cccl)：Thrust、CUB 与 CUDA C++ 核心计算库；各章引用匹配版本的接口。
 
 ## 下载与阅读
 
@@ -101,6 +105,6 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 后续章节
 
-计划继续覆盖常用库、多文件工程、多 GPU、Softmax 与毕业项目。
+计划继续覆盖多文件工程、多 GPU、Softmax 与毕业项目。
 
-这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前可读到第 21 章，并按每章的验收阶梯完成算法、边界、数值、工具、流水线与 Graph 实验。
+这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前可读到第 22 章，并按每章的验收阶梯完成算法、边界、数值、工具、流水线、Graph 与库接口实验。

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">逻辑元素数 ≠ 物理跨度：向量 inc 与矩阵 leading dimension</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2"><rect x="60" y="105" width="1080" height="150" rx="10"/><rect x="60" y="315" width="1080" height="180" rx="10"/><rect x="60" y="550" width="1080" height="90" rx="10"/></g>
+<text x="85" y="147" font-size="24">n=4，incx=2：逻辑 x[0..3] 存在物理索引 0、2、4、6</text><text x="85" y="194" font-size="23">[ x0 ]  [ guard ]  [ x1 ]  [ guard ]  [ x2 ]  [ guard ]  [ x3 ]</text><text x="85" y="233" font-size="19" fill="#b4c6af">最小分配元素数 = (n−1) × incx + 1 = 7；inc 的单位是元素，不是字节。</text>
+<text x="85" y="356" font-size="24">A 的逻辑 shape 是 2×3；每行物理 4 个 float，row stride=4</text><text x="85" y="403" font-size="23">row 0：[ a00 ] [ a01 ] [ a02 ] [ guard ]</text><text x="85" y="450" font-size="23">row 1：[ a10 ] [ a11 ] [ a12 ] [ guard ]</text>
+<text x="85" y="586" font-size="22">row-major A 重新解释为 column-major Aᵀ：shape 3×2，leading dimension 仍是 4</text><text x="85" y="621" font-size="19">数学转置视图不移动数据；padding 不参加点积，输出 guard 也应保持原值。</text>
+</g></svg>
