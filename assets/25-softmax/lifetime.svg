@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700"><rect width="1200" height="700" fill="#1e1e1e"/><g font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" fill="#d4d4d4">
+<text x="50" y="55" font-size="28">同一个 shared 数组分时复用：先 max，后 sum</text>
+<g fill="#292d32" stroke="#84939f" stroke-width="2"><rect x="60" y="100" width="1080" height="90" rx="8"/><rect x="60" y="235" width="1080" height="90" rx="8"/><rect x="60" y="370" width="1080" height="90" rx="8"/><rect x="60" y="505" width="1080" height="90" rx="8"/></g>
+<text x="85" y="150" font-size="24">各 thread 写 local_max → barrier → max 树：每轮都 barrier</text><text x="85" y="285" font-size="24">全部 thread 读 shared[0] 到自己的 row_max → 额外 barrier</text><text x="85" y="420" font-size="24">计算/暂存 e；写 local_sum → barrier → sum 树：每轮都 barrier</text><text x="85" y="555" font-size="24">读 row_sum；各 thread 只归一化自己负责的 output 项</text>
+<g stroke="#aab8c4" stroke-width="3"><path d="M600 193V230"/><path d="M600 328V365"/><path d="M600 463V500"/></g>
+<text x="65" y="655" font-size="22" fill="#b4c6af">读旧 max 的线程与写新 sum 的线程不能交叠；最后 sum 之后不再复用 shared。</text></g></svg>

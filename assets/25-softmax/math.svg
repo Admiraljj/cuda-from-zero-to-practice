@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700"><rect width="1200" height="700" fill="#1e1e1e"/><g font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" fill="#d4d4d4">
+<text x="50" y="55" font-size="28">一行 [1,2,3]：先平移，再指数，再除以同一个总和</text>
+<g fill="#292d32" stroke="#84939f" stroke-width="2"><rect x="60" y="110" width="1080" height="115" rx="8"/><rect x="60" y="265" width="1080" height="115" rx="8"/><rect x="60" y="420" width="1080" height="155" rx="8"/></g>
+<text x="85" y="155" font-size="24">m = max(1,2,3) = 3</text><text x="85" y="195" font-size="23">x - m = [-2,-1,0]；所有指数参数 ≤ 0</text>
+<text x="85" y="310" font-size="24">e = [exp(-2),exp(-1),1] ≈ [0.135335,0.367879,1]</text><text x="85" y="350" font-size="23">S = e[0]+e[1]+e[2] ≈ 1.503215；最大项保证至少一个 e=1</text>
+<text x="85" y="470" font-size="24">y = e/S ≈ [0.090031,0.244728,0.665241]</text><text x="85" y="520" font-size="23" fill="#b4c6af">每项非负；行和约为 1；输入值没有被概率“覆盖”。</text>
+<text x="65" y="625" font-size="22">[1001,1002,1003] 减 max 后仍为 [-2,-1,0]，数学上得到相同概率。</text><text x="65" y="668" font-size="20">图中小数是手算近似，不是 GPU 性能或实机测量结果。</text></g></svg>

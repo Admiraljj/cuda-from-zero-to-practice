@@ -4,11 +4,13 @@
 
 学习顺序是：先理解问题与数据，再手算线程分工，阅读完整程序，逐行理解新增语法，运行并验证结果，最后独立修改和练习。这不是速查表，也不是 NVIDIA 官方指南的逐页译本。
 
-> 当前发布第 1—23 章的教材化修订版，后续内容将逐章完善。
+> 第 1—26 章主线教材已全部编写完成，附录与案例随书提供。
 >
 > 文中的示例输出为预期结果；案例尚未完成实机验证，请在自己的开发环境中编译运行并核对。
 
 ## 从这里开始
+
+[完整阅读地图](00-阅读地图.md)提供学习顺序、能力关卡与复习入口；真正零基础从第1章开始。
 
 1. [C++ 与 Linux 基础](01-你需要的C++与Linux基础.md)
 2. [检查 GPU 与 CUDA 环境](02-检查GPU服务器与CUDA环境.md)
@@ -33,8 +35,11 @@
 21. [CUDA Graphs：捕获、参数更新与可复用工作流](21-CUDA-Graphs与重复工作流.md)
 22. [Thrust、CUB、cuBLAS：正确调用库与建立基线](22-Thrust-CUB-cuBLAS与库优先原则.md)
 23. [CMake、项目结构、测试与可复现构建](23-CMake-项目结构-测试与可复现构建.md)
+24. [多GPU入门：归属、分片、依赖与传输](24-多GPU入门.md)
+25. [综合项目：一步一步写出稳定GPU Softmax](25-综合项目-GPU-Softmax.md)
+26. [毕业工程、独立项目与CUDA学习路线](26-从初学者到CUDA工程师的路线.md)
 
-配套：[练习答案（第 1—23 章）](附录-C-练习答案.md)
+配套：[练习答案（第 1—26 章）](附录-C-练习答案.md)、[命令](附录-A-命令速查.md)、[诊断](附录-B-常见错误诊断.md)、[资料](附录-D-资料与继续学习.md)、[术语](附录-E-术语表.md)
 
 第 16 章包含 23 节、6 个完整程序、2 张本地暗色图和 24 道练习：从 shape/点积/线性下标，逐步写 naive、shared tiled GEMM，再推导 cuBLAS 布局、精度与统一 benchmark。命令入口见[第 16 章案例目录](code/16_matmul/README.md)。
 
@@ -45,6 +50,8 @@
 第 22 章包含 31 节、8 个完整程序、2 个辅助头文件、3 张暗色图和 28 道练习及详细答案。从 CPU 契约到 Thrust 容器/范围/函数对象/策略，再到 CUB 归约、Scan、稳定筛选与顺序工作区复用，最后验证 cuBLAS stride、两种标量模式、非零 beta 的 padded 非方阵 GEMM，以及四方法公平对照。命令见[第 22 章案例目录](code/22_libraries/README.md)。
 
 第 23 章包含 32 节、4 个独立递进阶段、25 份完整源码/头文件/构建配置、3 张暗色图和 32 道练习及详细答案。从单文件 CPU 程序开始，逐步拆分声明与定义、建立 CMake 目标与可选 CUDA/cuBLAS 后端，再学习真正的跨 .cu device link、Presets、CTest 与可复现记录。CPU-only 工程无需 CUDA；跳过 GPU 不冒充 GPU 验证通过。命令见[第 23 章案例目录](code/23_project/README.md)。
+
+第 24—26 章新增100节、31份完整源码/头文件/构建配置、8张本地暗色SVG、88道练习与逐题答案。第24章从CPU分片到双卡/peer/中转；第25章用五个完整阶段建立Softmax，比较serial/block/窄行warp；第26章提供完整CUB筛选后平方和工程与三个独立毕业项目的规格和验收。命令分别见[多GPU案例](code/24_multi_gpu/README.md)、[Softmax工程](code/25_softmax_walkthrough/README.md)、[毕业工程](code/26_capstone/README.md)。
 
 第 1 章只需要 C++17 编译器，不需要 GPU。第 2 章起以 Linux、NVIDIA GPU、CUDA Toolkit 为主线；环境检查和命令解释放在正文中。请按顺序阅读，不必预先掌握指针、warp、SIMT 或编译选项。
 
@@ -106,8 +113,10 @@ ctest --test-dir build -C Release --output-on-failure
 
 需要指定 GPU 架构时，在配置命令中添加经设备查询确认的 `-DCMAKE_CUDA_ARCHITECTURES=数字`，不要照抄不适合自己 GPU 的架构号。CMake 是可选的批量构建入口；初学时先执行正文的单文件命令。
 
-## 后续章节
+第23/26章根子工程默认CPU-only；启用其GPU后端分别添加BOOK23_ENABLE_CUDA=ON、BOOK26_ENABLE_CUDA=ON（第23章cuBLAS另加BOOK23_ENABLE_CUBLAS=ON），并指定核对后的架构。第24/25章GPU例随BUILD_CUDA_EXAMPLES构建；各章也有独立CPU-only/CUDA工程入口。
 
-计划继续覆盖多 GPU、Softmax 与毕业项目。
+## 完成主线之后
 
-这些内容不因出现在路线中就视为完成；每章补齐详细讲解、源码和相应检查后再加入公开仓库。当前可读到第 23 章，并按每章的验收阶梯完成算法、边界、数值、工具、流水线、Graph、库接口与工程测试实验。
+主线从C++零基础到独立CUDA项目共26章，已全部提供详细讲解、源码、图与答案。这不是CUDA全部高级特性的逐页译本；Driver API、NCCL、Tensor Core等按项目需求继续，入口见资料附录。
+
+编写与静态检查完成不代表实机验收。当前编辑环境没有C++/CUDA/CMake工具链与GPU，不能声称示例实际编译、CTest/GPU/Sanitizer/profiler或性能已通过；请在兼容开发环境按章验收，保留真实失败/跳过/未执行记录。

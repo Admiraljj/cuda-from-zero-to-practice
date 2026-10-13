@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700"><rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" fill="#d4d4d4"><text x="50" y="55" font-size="28">n=7，parts=2：商 q=3，余数 r=1；前 r 片多拿一个</text>
+<g fill="#292d32" stroke="#84939f" stroke-width="2"><rect x="60" y="120" width="580" height="130" rx="8"/><rect x="665" y="120" width="475" height="130" rx="8"/><rect x="60" y="340" width="1080" height="240" rx="10"/></g>
+<text x="87" y="163" font-size="23">global：0　1　2　3</text><text x="87" y="207" font-size="22" fill="#b4c6af">GPU 0：offset=0，count=4</text><text x="690" y="163" font-size="23">global：4　5　6</text><text x="690" y="207" font-size="22" fill="#b4c6af">GPU 1：offset=4，count=3</text>
+<text x="85" y="389" font-size="24">count(d) = q + (d &lt; r ? 1 : 0)</text><text x="85" y="441" font-size="24">offset(d) = d*q + min(d,r)</text><text x="85" y="493" font-size="22">每片使用 local i；host 位置是 offset(d)+i。</text><text x="85" y="543" font-size="22">n=1：片 0 为 [0,1)，片 1 为 [1,1)；零片不分配、不启动。</text>
+<text x="65" y="640" font-size="22">相邻边界相接、总 count=n、每项恰好一次；奇数与尾部不丢失。</text></g></svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#aab8c4"/></marker></defs>
+<rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" fill="#d4d4d4">
+<text x="50" y="55" font-size="28">一个 host 线程管理两张 GPU：切换选择，不迁移已有资源</text>
+<g fill="#292d32" stroke="#84939f" stroke-width="2"><rect x="60" y="100" width="1080" height="120" rx="10"/><rect x="60" y="310" width="500" height="220" rx="10"/><rect x="640" y="310" width="500" height="220" rx="10"/></g>
+<text x="85" y="145" font-size="24">CPU 主存：input[0..6]、output[0..6]</text><text x="85" y="186" font-size="21">host 当前 device：0 → 1 → 0 → 1；每次提交/等待明确选择</text>
+<g stroke="#aab8c4" stroke-width="3" marker-end="url(#a)"><path d="M290 225L290 300"/><path d="M890 225L890 300"/></g>
+<text x="85" y="355" font-size="25">GPU 0：offset=0，count=4</text><text x="85" y="400" font-size="22">显存 input0/output0：local 0..3</text><text x="85" y="442" font-size="22">stream0、begin0、end0 属于 GPU 0</text><text x="85" y="487" font-size="21" fill="#b4c6af">映射 global 0,1,2,3</text>
+<text x="665" y="355" font-size="25">GPU 1：offset=4，count=3</text><text x="665" y="400" font-size="22">显存 input1/output1：local 0..2</text><text x="665" y="442" font-size="22">stream1、begin1、end1 属于 GPU 1</text><text x="665" y="487" font-size="21" fill="#b4c6af">映射 global 4,5,6</text>
+<text x="65" y="590" font-size="23">cudaSetDevice(1) 不会把 input0、stream0、event0 变为 GPU 1 的对象。</text><text x="65" y="635" font-size="21">两卡各自完成后，host 才检查整个 output；显存总容量不是自动拼成一块。</text>
+</g></svg>

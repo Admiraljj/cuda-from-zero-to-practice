@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#aab8c4"/></marker></defs><rect width="1200" height="700" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" fill="#d4d4d4">
+<text x="50" y="55" font-size="28">同一依赖：GPU 0 的 3x 必须先完成，GPU 1 才能消费</text>
+<g fill="#292d32" stroke="#84939f" stroke-width="2"><rect x="50" y="110" width="315" height="110" rx="8"/><rect x="443" y="110" width="315" height="110" rx="8"/><rect x="835" y="110" width="315" height="110" rx="8"/><rect x="50" y="380" width="315" height="110" rx="8"/><rect x="443" y="380" width="315" height="110" rx="8"/><rect x="835" y="380" width="315" height="110" rx="8"/></g>
+<text x="72" y="150" font-size="22">GPU 0：source=3x</text><text x="72" y="188" font-size="20">D2H → host relay</text><text x="467" y="150" font-size="22">host 等待 source stream</text><text x="467" y="188" font-size="20">relay 完成后才 H2D</text><text x="858" y="150" font-size="22">GPU 1：received=3x</text><text x="858" y="188" font-size="20">再算 2*received+1</text>
+<text x="55" y="280" font-size="23" fill="#b4c6af">staged：显式主机中转；无需两卡互访能力。</text>
+<text x="72" y="420" font-size="22">GPU 0：source=3x</text><text x="72" y="458" font-size="20">记录 ready0</text><text x="467" y="420" font-size="22">GPU 1 stream 等 ready0</text><text x="467" y="458" font-size="20">再 peer copy 0 → 1</text><text x="858" y="420" font-size="22">GPU 1：received=3x</text><text x="858" y="458" font-size="20">同 stream 消费并回传</text>
+<g stroke="#aab8c4" stroke-width="3" fill="none" marker-end="url(#a)"><path d="M370 165H430"/><path d="M762 165H820"/><path d="M370 435H430"/><path d="M762 435H820"/></g>
+<text x="55" y="550" font-size="23" fill="#b4c6af">peer：本例查询/启用 accessor=1 → owner=0；这不是数据流的箭头。</text><text x="55" y="600" font-size="22">两条路线都验证中间 3x、最终 6x+1 与源输入不变；不假定哪条一定更快。</text><text x="55" y="645" font-size="20">ready0 是依赖事件，不把 GPU 0/1 的两个 Event 相减来计时。</text>
+</g></svg>
