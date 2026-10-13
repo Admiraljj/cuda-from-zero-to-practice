@@ -2439,3 +2439,103 @@ busy表示有当前待完成/消费块，consume后清false；used表示本轮�
 每slot增加host_a/host_b与device_a/device_b，另有host_output/device_output（或在确认逐元素安全后选择设备原地输出）。两次H2D同stream排在add之前，D2H之后record done。CPU复用前等done并消费旧结果；global count/offset和尾bytes保持正确。
 
 CPU oracle按相同输入生成a+b，结果有限且逐项检查，并验证两个host源不变。串行基线使用同chunk、同memory和同数学任务，完整计时包含两H2D/add/D2H与staging/gather；逻辑传输改为3*n*sizeof(float)。最后用Systems确认跨slot交叠，而非只看speedup。
+
+## 第 21 章
+
+### 1. 三阶段手算
+
+input 为 -1/-0.5/0/0.5/1，scale 后为 -2/-1/0/1/2，bias 后为 -1/0/1/2/3，ReLU 后为 0/0/1/2/3。先确定 alpha/beta 和操作顺序；把 ReLU 提前到 bias 之前会改变负数附近的结果，不能只因算子“很简单”就重排。
+
+### 2. 重放不是递推
+
+scale 每次读取只读原始 input，完整写 output；bias/relu 只使用这一轮刚写的 output。因此三轮都计算同一个 f(input)，不是 f(f(f(input)))。只有把第一步改成读取上一轮 output，或明确进行输入/输出交换，才形成迭代算法；它必须有另一个 CPU oracle。
+
+### 3. 读写身份
+
+scale：input 只读，output 逐元素覆盖。bias：读取并更新 output[i]，不读 input。relu：读取并更新 output[i]，不读 input。input 不被 kernel 写；每个合法输出只有对应 i 的线程处理。跨 kernel 的读写顺序由 stream 或 Graph 边保证，不需要插入 block barrier，也不能靠 block barrier 跨 kernel 建依赖。
+
+### 4. 假想 DAG
+
+串行和为 2+3+5+1+2=13。upload 在 2 结束，A/B 分别在 5/7 结束；merge 开始=max(5,7)=7，在 8 结束，download 在 10 结束。关键路径为 upload→B→merge→download，长度 10。它是假设资源足够的下界；实际 CUDA 资源竞争、供给和调度可能延长时间。
+
+### 5. 少了一条边
+
+没有 B→merge 时，merge 可能在 B 完成之前读 b，得到 NaN、旧值或偶尔正确值。host 先调用 B 只是提交顺序，不建立不同工作流之间的数据完成依赖；图必须显式表达 B 是 merge 的前序。偶尔输出通过不能证明缺边合法，缺失依赖的图在语义上已经错误。
+
+### 6. 四个句柄
+
+graph 是工作和依赖定义，node 标识定义中的某项操作，exec 是实例化后的可执行对象，stream 排序 exec 的 launch 与图外异步工作。四者都不是结果数组，也不是 threadIdx/blockIdx。复制句柄只复制引用对象的标识，不克隆资源或实例。
+
+### 7. 尚未执行
+
+不能。capture 记录操作，instantiate 形成执行对象；这两个阶段都不等价于执行数学工作。至少还要 GraphLaunch，并在结果相关的完成点等待，然后回传/读取。不要将 capture 结束与 D2H 完成混淆。
+
+### 8. 小图重放与大图
+
+捕获三节点后 launch 100 次：定义中仍是三 kernel，host 提交 100 次 GraphLaunch。捕获时循环 100 次：定义约含 300 个 kernel 节点，只启动一次则执行其中的 100 组。还要考虑是否每组从原始输入读取、是否需要每组单独输出、是否含拷贝。节点数、准备成本、图大小和 host 提交数不同，不能仅凭循环位置宣称两者等价或某者最快。
+
+### 9. 值、地址、内容
+
+修改 host beta 不自动更新已记录的标量。修改 host 指针变量也不自动更换图中保存的地址。完成上一轮后改写同一有效输入分配的内容，下一次操作可读取新内容；内容变更还需要保证 upload/producer 在 consumer 之前。先释放旧地址则违反生命周期，变量继续同名没有保护作用。
+
+### 10. &input 与 input
+
+input 是一个 device 地址值，指向 device 数组。&input 是保存该地址值的 host 变量的位置；kernelParams 数组告诉 API 从 &input 读取一个指针参数值。把 input 误填成参数值的位置，会让 API 从错误的内存位置解释参数。参数列表的顺序、类型和大小必须匹配 kernel 签名，不是自然语言排列。
+
+### 11. 参数表与数据分配
+
+添加/设置 kernel 节点参数时，API 复制参数列表及参数值；局部 arguments 完成该调用后可结束。被复制的 device 指针仍指向原来的 device 分配，复制一个地址不会复制数组或转移所有权。该分配必须延续到最后一次相关执行完成；host memcpy 源/目的同样有实际借用生命周期。
+
+### 12. 修改谁
+
+GraphKernelNodeSetParams 修改 graph 中的定义，已存在的 exec 不自动改变。GraphExecKernelNodeSetParams 修改指定 exec 中对应原节点的执行参数，只影响未来 launch，不回溯改写已提交工作。本例保留原定义和节点身份，逐阶段同步后更新。不能拿候选图的某个“相似节点”冒充实例化时原图的节点。
+
+### 13. 更新 n
+
+至少核对 kernel 参数 n、grid 覆盖、输入/输出/临时空间容量、H2D/D2H 字节范围与 CPU oracle/验证长度。n=0 应使用明确的无工作路径，不启动 grid=0。若实际分配不足，需要等旧工作完成后安全扩容，再更新所有有关地址/参数或重建；仅改 n 会让多处契约不一致。
+
+### 14. 两层结果与错误范围
+
+cudaError_t 表明 API 是否成功；info.result 指出兼容性更新的分类，并可用 errorNode/errorFromNode 辅助定位。拓扑相同仍可能违反具体节点限制。只对已确认的 GraphExecUpdateFailure 做回退；驱动、设备或其他异步错误不能当“普通更新不兼容”吞掉。更新被拒绝后，应确保未使用错误新参数的旧实例继续计算并误标成功。
+
+### 15. 空节点也属于拓扑
+
+empty 节点虽不计算数值，但仍是节点，添加它改变节点数和边连接。整图更新要求兼容拓扑，不是“输出数学一样就一定可更新”。本例明确期待 topology changed，再创建 replacement、销毁已完成的旧 exec、替换句柄并验证新结果。
+
+### 16. 失败收尾
+
+BeginCapture→记录 kernel→非法 stream synchronize→核对错误→查询 capture 状态→EndCapture 收尾→核对空图/失效错误→只清理已认识的 last-error→销毁并重建 stream→正常 capture/instantiate/launch/同步/验证。EndCapture 不应因同步失败而被跳过；CUDA_CHECK 包住预期错误会立即退出，所以要自行检查该调用。
+
+### 17. 为什么不同步
+
+submit_three 同时用于普通提交和 capture。cudaGetLastError 不等 GPU 完成，适合检查 launch；加入 cudaDeviceSynchronize 会在捕获时违反协议，普通性能基线也会被逐 kernel 等待拖慢。完成检查放在图外的执行尾部，而不是删掉它或藏在每个节点提交内。
+
+### 18. Fork / Join
+
+资源为只读 input、独立 a/b、output。root：初始化 output→record fork→A→wait joined→merge→EndCapture；branch：wait fork→B→record joined。A→merge 来自 root 前序；B→merge 来自 event wait；join 同时保证另一条被捕获 stream 回到 origin。最终 out=2*input+3*input；资源允许时 A/B 可以重叠，但不要求为了 PASS 一定测到重叠。
+
+### 19. 同 exec 与复制句柄
+
+一个 exec 不能与自己并发；不同 stream 的 launch 仍按该 exec 的顺序约束排序。复制 cudaGraphExec_t 只是相同对象的另一个标识。要并发独立任务需实例化多个 exec，并为它们提供独立或正确同步的内存与 workspace；实例数量和缓冲数量应一并审计。
+
+### 20. 公平三方法
+
+queued-three 与 graph-three 数学和三个 kernel 相同，重点比较定义/提交方式。queued-fused 同数学但改变实现，减少节点和中间内存流量。若普通每 kernel 同步，Graph 的所谓收益夹带删除人为等待的收益。应让普通三 kernel 连续排队，整批尾部等待，并报告错误检查 helper 的成本也在提交区间中。
+
+### 21. 不可相加
+
+host submit 测 CPU 提交循环，host complete 还含 Event record 和最终完成等待；submit 是后者的一部分。Event 测 GPU 时间跨度，可能含供给空隙，并与 CPU 活动重叠。三者不能相加。D2H、校验、构图和初始化在本 benchmark 测量之外，端到端比较要另记范围，不把 kernel 时间替代整个应用时间。
+
+### 22. 盈亏平衡
+
+150+5R<8R，因此 R>50，第一严格获益整数是 51；R=50 打平。若 s=4/g=5 且 S为正，Graph 单轮还更慢，没有这个模型下的正次数盈亏平衡。实测多轮统计、更新/缓存维护以及共同传输成本可能改变工程判断，模型不能替代实测。
+
+### 23. 采集改变程序
+
+先保存无 profiler 多轮 benchmark，再用 graph 粒度报告看整体；node 粒度只用于解释结构/活动，单独分析采集开销。检查 GPU/Toolkit/输入/重复次数/构建与计时范围是否一致。不能据 node tracing 下的单次慢结果断言 Graph 在原应用必然无收益，也不能据缺少可见节点断言没有执行。
+
+### 24. 独立小项目验收
+
+最低交付包括：数学规格、逐元素 CPU oracle、普通/Graph/fused 完整源码与命令、0/1/257/1031 输入、负/零/正值、非法参数拒绝、NaN sentinel、输入不变性、最后完成点和释放顺序。alpha/beta 更新至少验证两组不同结果；shape 改变同时处理 grid/copy/capacity，安全回退有独立输出验证。
+
+提交性能记录时附 GPU/driver/Toolkit、Release 命令、预热、轮换样本、提交/完成/Event 三范围、构图/上传/更新成本和无 profiler 基线；用 Systems 解释收益来源。即使 Graph 没有明显收益，只要证据充分并选择简单正确实现，也满足工程判断要求。进阶 graph-fused 比较必须注明是改变提交方式，不能把三节点与一节点的所有差异算给 Graph。

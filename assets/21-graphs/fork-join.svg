@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#a9b5be"/></marker></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">Fork / Join：没有 A → B，不代表 A 与 B 一定同时执行</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2">
+<rect x="60" y="210" width="250" height="105" rx="10"/><rect x="440" y="115" width="250" height="105" rx="10"/><rect x="440" y="300" width="250" height="105" rx="10"/><rect x="840" y="210" width="290" height="105" rx="10"/>
+<rect x="60" y="465" width="1070" height="120" rx="10"/></g>
+<g stroke="#a9b5be" stroke-width="3" fill="none" marker-end="url(#arrow)"><path d="M310 240L433 168"/><path d="M310 285L433 350"/><path d="M690 168L833 240"/><path d="M690 350L833 285"/></g>
+<g font-size="24"><text x="85" y="251">初始化 output</text><text x="465" y="156">A：a = 2 × input</text><text x="465" y="341">B：b = 3 × input</text><text x="865" y="251">Merge：out = a + b</text></g>
+<g font-size="19"><text x="85" y="286">origin stream：root</text><text x="465" y="192">提交到 root</text><text x="465" y="377">提交到 branch</text><text x="865" y="286">root 等 B；A 已在前序</text></g>
+<text x="84" y="503" font-size="22">capture 中：record(fork) → branch wait；record(joined) → root wait</text>
+<text x="84" y="543" font-size="20">必须回到发起 capture 的 root，汇合后再 EndCapture；launch stream 只负责外部排序。</text>
+<text x="55" y="624" font-size="19" fill="#b4c6af">正确性来自依赖；实际重叠取决于硬件资源和调度。图不是硬件执行轨迹。</text>
+</g></svg>

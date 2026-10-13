@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650">
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8" fill="#a9b5be"/></marker></defs>
+<rect width="1200" height="650" fill="#1e1e1e"/>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" fill="#d4d4d4">
+<text x="55" y="55" font-size="28">CUDA Graph：记录工作流，不是记录一份结果</text>
+<g fill="#292d32" stroke="#798793" stroke-width="2">
+<rect x="55" y="110" width="300" height="140" rx="12"/><rect x="450" y="110" width="300" height="140" rx="12"/><rect x="845" y="110" width="300" height="140" rx="12"/>
+<rect x="55" y="340" width="1090" height="190" rx="12"/></g>
+<g stroke="#a9b5be" stroke-width="3" marker-end="url(#arrow)"><path d="M355 180H445"/><path d="M750 180H840"/><path d="M995 250V333"/></g>
+<g font-size="23"><text x="80" y="152">定义 cudaGraph_t</text><text x="475" y="152">实例 cudaGraphExec_t</text><text x="870" y="152">启动到 stream</text></g>
+<g font-size="19"><text x="80" y="188">节点 + 边 + 参数</text><text x="80" y="218">capture 或显式添加</text><text x="475" y="188">instantiate 验证与准备</text><text x="475" y="218">可重复使用，不是结果缓存</text><text x="870" y="188">launch 只提交，不等完成</text><text x="870" y="218">同步后读取 / 复用缓冲</text></g>
+<text x="80" y="378" font-size="23">地址仍指向同一份分配；每次执行都重新读取数据</text>
+<g font-size="20"><text x="80" y="420">host 输入 → H2D → scale → bias → ReLU → D2H → host 输出</text><text x="80" y="460">参数值：capture 时 beta=1；以后给 host beta 赋 99，不会自动更新节点。</text><text x="80" y="499">内存内容：完成后改写同地址输入，下一次 H2D 可以读取新内容。</text></g>
+<text x="55" y="592" font-size="20" fill="#b4c6af">先等执行完成，再销毁 exec / graph、释放 device / pinned 缓冲。</text>
+</g></svg>

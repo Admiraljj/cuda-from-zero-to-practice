@@ -605,4 +605,4 @@ compute-sanitizer --tool memcheck --error-exitcode 99 ./event_dependency 1031
 
 本章已能用stream与event表达一个数据依赖图。若重复执行固定短任务，host提交仍可能占比显著；第21章将研究CUDA Graphs。但先完成本章生命周期与完成点：Graph不会自动修复错误的数据依赖或缓冲复用。
 
-第21章仍待教材化完善。资料核对：[CUDA Asynchronous Execution](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html)、[Runtime API同步行为](https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html)、[Nsight Systems](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)。
+继续阅读[第 21 章：CUDA Graphs 与重复工作流](21-CUDA-Graphs与重复工作流.md)。资料核对：[CUDA Asynchronous Execution](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/asynchronous-execution.html)、[Runtime API同步行为](https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html)、[Nsight Systems](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)。
