@@ -339,7 +339,14 @@ mark(); // completed now equals 2
 
 auto让编译器推导mark这个lambda对象的类型，不表示“随便一种类型”。[&]是捕获列表：函数体使用外层自动变量时按引用借用；空的()是本例参数列表；花括号中是被调用时执行的函数体。定义mark不会先执行两次++，只有mark()才执行。
 
-例如auto submit=[&](int method){...};表示带一个int参数的host可调用对象；它借用当前作用域内实际使用的指针、stream等变量。借用这些变量不复制它们指向的CUDA数组，不分配device memory，也不会把lambda自动变成kernel。
+带一个int参数时，可在上述completed仍有效的同一作用域继续写：
+
+```cpp
+auto add = [&](int amount) { completed += amount; };
+add(3); // completed now equals 5
+```
+
+后文submit对象的method参数同样是int，用于选择要提交的方法；其函数体借用当前作用域内实际使用的指针、stream等变量。借用这些变量不复制它们指向的CUDA数组，不分配device memory，也不会把lambda自动变成kernel。
 
 本书这些lambda只用于host端减少重复组织代码，不把捕获lambda传给device算法，不要求额外device-lambda编译扩展。C++捕获也不是第21章的Graph capture：前者是一个对象怎样持有外层变量，后者是怎样记录CUDA工作流。
 
